@@ -2,23 +2,15 @@ from tkinter import ttk
 from tkinter import *
 from sqlite3 import *
 from os import environ, makedirs, path
-from openpyxl import Workbook
+import os
+from ortools.sat.python import cp_model
+from sqlite3 import *
 import random
-
-# Класс класса
-class Class:
-    def __init__(self, name, clas, teacher_lessons: dict):
-        self.name = name
-        self.clas = clas
-        self.teacher_lessons = dict(teacher_lessons)
-###
-
-# Класс учителя
-class Teacher:
-    def __init__(self, name, exceptions=None):
-        self.name = name
-        self.exceptions = exceptions if exceptions else set()
-###
+from openpyxl import Workbook
+from itertools import product
+from openpyxl.styles import Alignment, PatternFill, Font, Border, Side
+from openpyxl.utils import get_column_letter
+import threading
 
 #<Глав меню> - 1
 class main_menu:
@@ -27,17 +19,17 @@ class main_menu:
         self.root_menu_1 = root
         self.root_menu_1.style = ttk.Style()
         root.style.theme_use('clam')
-        self.root_menu_1.title("Главное окно")
+        self.root_menu_1.title("Cоздание расписания Аничкого лицея")
         self.root_menu_1.geometry(f"{int(self.root_menu_1.winfo_screenwidth() * 0.64)}x{int(self.root_menu_1.winfo_screenheight()*0.7)}")
         self.root_menu_1.resizable(width=False, height=False) 
     ###
 
     #БД
         #Подключение баз данных
-        database_folder = "exe timetable"
+        database_folder = "DataBase"
         makedirs(database_folder, exist_ok=True)
         db_path = path.join(database_folder, "InputData.db")
-        self.all_data_base = connect(f"{db_path}")
+        self.all_data_base = connect(f"{db_path}", check_same_thread=False)
         self.con_all_data_base = self.all_data_base.cursor()
         ###
 
@@ -50,7 +42,15 @@ class main_menu:
 
         self.con_all_data_base.execute("""CREATE TABLE IF NOT EXISTS lessons (id INTEGER PRIMARY KEY, 
                                         Id_parallel TEXT, Subject TEXT, Hours TEXT, Id_teacher TEXT);""")
-        self.all_data_base.commit()              
+        self.all_data_base.commit()
+
+        self.con_all_data_base.execute("""CREATE TABLE IF NOT EXISTS pe (id INTEGER PRIMARY KEY, 
+                                        Id_parallel TEXT, Teacher TEXT, Day TEXT, Lesson TEXT);""")
+        self.all_data_base.commit()
+        # дополнительная таблица для внеурочек (только преподаватель)
+        self.con_all_data_base.execute("""CREATE TABLE IF NOT EXISTS extra (id INTEGER PRIMARY KEY,
+                                        Id_parallel TEXT, Teacher TEXT);""")
+        self.all_data_base.commit()
         ###
 
 
@@ -58,15 +58,91 @@ class main_menu:
         self.con_all_data_base.execute(""" CREATE TABLE IF NOT EXISTS rooms (id INTEGER PRIMARY KEY,
                                         Number TEXT, Graph_or_Lyceum TEXT, Big_or_Small TEXT, Subject TEXT);""")
         self.all_data_base.commit()
-        ###
+        self.con_all_data_base.execute(
+            "SELECT * FROM rooms WHERE Number = ? AND Graph_or_Lyceum = ?",
+            ("ОТ_1", "Лицей")
+        )
+        if not self.con_all_data_base.fetchone():
+            self.con_all_data_base.execute(
+                "INSERT INTO rooms (Number, Graph_or_Lyceum, Big_or_Small, Subject) VALUES (?, ?, ?, ?)",
+                ("ОТ_1", "Лицей", "Маленький", "Инфа")
+            )
+            self.all_data_base.commit()
+
+        #ОТ_2
+        self.con_all_data_base.execute(
+            "SELECT * FROM rooms WHERE Number = ? AND Graph_or_Lyceum = ?",
+            ("ОТ_2", "Лицей")
+        )
+        if not self.con_all_data_base.fetchone():
+            self.con_all_data_base.execute(
+                "INSERT INTO rooms (Number, Graph_or_Lyceum, Big_or_Small, Subject) VALUES (?, ?, ?, ?)",
+                ("ОТ_2", "Лицей", "Маленький", "Инфа")
+            )
+            self.all_data_base.commit()
+
+        #УОО
+        self.con_all_data_base.execute(
+            "SELECT * FROM rooms WHERE Number = ? AND Graph_or_Lyceum = ?",
+            ("УОО", "Лицей")
+        )
+        if not self.con_all_data_base.fetchone():
+            self.con_all_data_base.execute(
+                "INSERT INTO rooms (Number, Graph_or_Lyceum, Big_or_Small, Subject) VALUES (?, ?, ?, ?)",
+                ("УОО", "Лицей", "Большой", "Физра")
+            )
+            self.all_data_base.commit()
+
+
+
+        #СЗ
+        self.con_all_data_base.execute(
+            "SELECT * FROM rooms WHERE Number = ? AND Graph_or_Lyceum = ?",
+            ("СЗ", "Графский")
+        )
+        if not self.con_all_data_base.fetchone():
+            self.con_all_data_base.execute(
+                "INSERT INTO rooms (Number, Graph_or_Lyceum, Big_or_Small, Subject) VALUES (?, ?, ?, ?)",
+                ("СЗ", "Графский", "Большой", "Физра")
+            )
+            self.all_data_base.commit()
+        
+        #401
+        self.con_all_data_base.execute(
+            "SELECT * FROM rooms WHERE Number = ? AND Graph_or_Lyceum = ?",
+            ("401", "Графский")
+        )
+        if not self.con_all_data_base.fetchone():
+            self.con_all_data_base.execute(
+                "INSERT INTO rooms (Number, Graph_or_Lyceum, Big_or_Small, Subject) VALUES (?, ?, ?, ?)",
+                ("401", "Графский", "Большой", "Инфа")
+            )
+            self.all_data_base.commit()
+        
+        #407
+        self.con_all_data_base.execute(
+            "SELECT * FROM rooms WHERE Number = ? AND Graph_or_Lyceum = ?",
+            ("407", "Графский")
+        )
+        if not self.con_all_data_base.fetchone():
+            self.con_all_data_base.execute(
+                "INSERT INTO rooms (Number, Graph_or_Lyceum, Big_or_Small, Subject) VALUES (?, ?, ?, ?)",
+                ("407", "Графский", "Большой", "Инфа")
+            )
+            self.all_data_base.commit()
+
 
         #Таблицы для учителя
         self.con_all_data_base.execute(""" CREATE TABLE IF NOT EXISTS teachers (id INTEGER PRIMARY KEY,
-                                        Surname TEXT, Name TEXT, Patrony TEXT, Lesson TEXT);""")
+                                        Surname TEXT, Name TEXT, Patrony TEXT, Trans TEXT);""")
         self.all_data_base.commit()
 
         self.con_all_data_base.execute(""" CREATE TABLE IF NOT EXISTS exceptions (id INTEGER PRIMARY KEY,
-                                        Rel TEXT, Day TEXT, Begining TEXT, Ending TEXT);""")
+                                        Rel TEXT, Day TEXT, Lessons TEXT);""")
+        self.all_data_base.commit()
+
+        self.con_all_data_base.execute(""" CREATE TABLE IF NOT EXISTS prio (id INTEGER PRIMARY KEY,
+                                        Rel TEXT, Rooms Text, Building Text);""")
         self.all_data_base.commit()
         ###
 
@@ -116,7 +192,7 @@ class main_menu:
     #Блок создания и проверки параллели
         creating_parallel = ttk.Button(
             self.root_menu_1,
-            text = "Добавление паралелли",
+            text = "Добавление класса",
             style="Make_Par.TButton",
             command = self.open_screen_add_parallel
             )
@@ -362,7 +438,7 @@ class making_settings:
     #Блок выбора количесва перебежек
         self.num_dash = ttk.Label(
             self.root_menu_1,
-            text="Множитель алгортима:",
+            text="Время работы программы:",
             style="TLabel",
             anchor="center"
         )
@@ -397,7 +473,7 @@ class making_settings:
         input_class_3 = self.number_3.get()
         input_class_4 = self.number_4.get()
 
-        multplier = self.multi.get()
+        time = self.multi.get()
     ###
 
     #Проверки перед дальнейшей программой
@@ -414,18 +490,21 @@ class making_settings:
 
         all_numbers = "0987654321"
         #Проверка множителя
-        for i in multplier:
+        for i in time:
             if i not in all_numbers:
-                warning = eror_popup(self.root_menu_1, "Ошибка в кол-ве перебежек")
+                warning = eror_popup(self.root_menu_1, "Ошибка в времени работы программы")
                 warning.root.mainloop()
                 return  
         ###
-
+        if int(time) < 50:
+            warning = eror_popup(self.root_menu_1, "Слишком мало времени")
+            warning.root.mainloop()
+            return  
     
 
         
             
-        data_settings = ((input_class_1, input_class_2), (input_class_3, input_class_4), multplier)
+        data_settings = ((input_class_1, input_class_2), (input_class_3, input_class_4), time)
 
         creating_timetable(self.con_menu_1, self.base_menu_1, data_settings, self.root_parent_1, self.parent_menu, self.root_menu_1, self.parent_menu)
         ###
@@ -449,6 +528,7 @@ class creating_timetable:
         self.con = con
         self.base = base
         self.settingss = settings
+
         self.main_menu_root = main_menu_root
         self.main_menu_itself = main_menu
         parent_root.destroy()
@@ -476,24 +556,47 @@ class creating_timetable:
 
         self.root.configure(bg="#e0dcd4")
     #Виджеты создания
+        
+        # Получаем множитель времени в начале
+        self.time = int(self.settingss[2])
+        
         self.in_process = ttk.Label(
             self.root,
-            text = "Расписания создаются!",
+            text = "Расписание создается!",
             style="1.TLabel",
             anchor="center"
             )
-        self.in_process.place(relx=0, rely=0.1, relwidth=1, relheight=0.25)
+        self.in_process.place(relx=0, rely=0.1, relwidth=1, relheight=0.15)
 
-    #Иконка загрузки
-        self.loading_index = 0
-        self.loading_label = ttk.Label(
+    #Прогресс-бар
+        style_1_0.configure("Progress.Horizontal.TProgressbar", 
+                           length=300, 
+                           mode='determinate',
+                           background="#D2691E")
+        
+        self.progress_var = DoubleVar()
+        self.progress_bar = ttk.Progressbar(
             self.root,
-            text= "֎",
-            style= "2.TLabel",
-            foreground = "#D2691E",
+            variable=self.progress_var,
+            maximum=100,
+            length=300,
+            mode='determinate',
+            style="Progress.Horizontal.TProgressbar"
+        )
+        self.progress_bar.place(relx=0.1, rely=0.28, relwidth=0.8, relheight=0.1)
+        
+        # Текст процента
+        self.progress_text = ttk.Label(
+            self.root,
+            text="0%",
+            style="3.TLabel",
             anchor="center"
         )
-        self.loading_label.place(relx=0, rely=0.3, relwidth=1, relheight=0.25)
+        self.progress_text.place(relx=0.1, rely=0.38, relwidth=0.8, relheight=0.1)
+        
+        # Инициализация прогресса
+        self.progress_step = 0
+        self.max_progress_steps = max(self.time * 10, 100)  # количество шагов для прогресса
         
     ###
 
@@ -508,993 +611,1676 @@ class creating_timetable:
         self.add_class.place(relx=0, rely=0.75, relwidth=1, relheight=0.25)
     ###
  
-    #Алгоритм
-        self.multiplier = int(self.settingss[2])
-
+    #Данные из окна
         settings = (self.settingss[0], self.settingss[1]) # кнопочка в меню
 
         self.group_1 = (int(settings[0][0]), int(settings[0][1]))
         self.group_2 = (int(settings[1][0]), int(settings[1][1]))
-
-        #Входыне данные из базы
-        self.classes = []
-        self.con.execute("""SELECT * FROM parallels""")
-        list_parallels = self.con.fetchall() #Получение данных о параллелях
-        for i in list_parallels:
-            dict_lessons = {}
-            self.con.execute("SELECT * FROM lessons WHERE Id_parallel = ?", (str(i[0])))
-            lessons = self.con.fetchall() #Получение данных об уроках параллели
-
-            list_english = []
-            list_it = []
-            for j in lessons:
-                if j[2][0:len(j[2])-2] == "Информатика":
-                    list_it.append((j[4]))
-                    list_it.append((j[3]))
-                elif j[2][0:len(j[2])-2] == "Английский":
-                    list_english.append(j[4])
-                    list_english.append(j[3])
-
-            if len(list_english) > 2:
-                dict_lessons[(list_english[0], list_english[2])] = list_english[1]
-            elif len(list_english) > 0 :
-                dict_lessons[(list_english[0], )] = list_english[1]
-
-
-            if len(list_it) > 2:
-                dict_lessons[(list_it[0], list_it[2])] = list_it[1]
-            elif len(list_it) > 0:
-                dict_lessons[(list_it[0], )] = list_it[1]
-
-            for j in lessons:
-                if not(j[2][0:len(j[2])-2] == "Информатика" or j[2][0:len(j[2])-2] == "Английский"):
-                    if dict_lessons.get((j[4], ), False) is False:
-                        dict_lessons[(j[4], )] = int(j[3])
-                    else:
-                        dict_lessons[(j[4], )] = dict_lessons[(j[4], )] + int(j[4])
-            self.classes.append(Class(str(i[0]), int(i[2]), dict_lessons))
-            ###
-
-            #Учителя
-        self.teachers = []
-        answ = ("Понедельник", "Вторник", "Среда", "Четверг", "Пятница", "Суббота")
-        self.con.execute("""SELECT * FROM teachers""")
-        list_teachers = self.con.fetchall() #Получение данных об учителях
-        for i in list_teachers:
-            set_exce = set()
-            self.con.execute("SELECT * FROM exceptions WHERE Rel = ?", (str(i[0]), ))
-            exceptions = self.con.fetchall() #Получение данных об исключениях учителя
-            if exceptions == []:
-                self.teachers.append(Teacher(str(i[0]), exceptions= None))
-            else:
-                for j in exceptions:
-                    day = 0
-                    for р in range(0, len(answ)):
-                        if answ[р] == j[2]:
-                            day = р + 1
-                            break
-                    if j[3] == "0" and j[4] == "0":
-                        for g in range(1, 9):
-                            set_exce.add((day, g))
-                    else:
-                        for g in range(int(j[3]), int(j[4]) + 1):
-                            set_exce.add((day, g))
-                self.teachers.append(Teacher(str(i[0]), exceptions= set_exce))
-            ###
-
-        self.mega_end()
-
-    # 1 ЭТАП АЛГОРИТМ_1
-
-    # *) Определим день-/корпус по id
-    def class_building_for_day(self, clas, day, group, stage):
-
-        num = int(clas) 
-
-        if stage == 1:
-            if int(day) in range(4): #Сначала идет group_1
-                if num in group:
-                    return 1
-                else:
-                    return 2
-            else:
-                if num in group:
-                    return 2
-                else:
-                    return 1
-
-        elif stage == 2:
-            if int(day) in range(4): #Сначала идет group_1
-                if num not in group:
-                    return 1
-                else:
-                    return 2
-            else:
-                if num not in group:
-                    return 2
-                else:
-                    return 1
-
-        elif stage == 3:
-            if int(day) % 2 == 0:
-                if num in group:
-                    return 1
-                else:
-                    return 2
-            else:
-                if num in group:
-                    return 2
-                else:
-                    return 1
-
-        elif stage == 4:
-            if int(day) % 2 != 0:
-                if num in group:
-                    return 1
-                else:
-                    return 2
-            else:
-                if num not in group:
-                    return 2
-                else:
-                    return 1
-
-
-# *) Определим корпус по слоту учитель
-    def get_teacher_building(self, mode_boundary, slot):
-        """
-        mode=0 -> весь день корпус_1
-        mode=1 -> весь день корпус_2
-        mode=2 -> слоты <= boundary -> корпус_1, слоты > boundary -> корпус_2
-        mode=3 -> слоты <= boundary -> корпус_2, слоты > boundary -> корпус_1
-        """
-        mode, boundary = mode_boundary
-        if mode == 0:
-            return 1
+    #
         
-        elif mode == 1:
-            return 2
-        
-        elif mode == 2:
-            if boundary is None:
-                boundary = 4
-            return 1 if slot <= boundary else 2
-        
-        elif mode == 3:
-            if boundary is None:
-                boundary = 4
-            return 2 if slot <= boundary else 1
-
-# 1) Генерация пребывания учителей по дням
-    def generate_teacher_day_plan(self, teachers, days=6, slots_per_day=8):
-        """
-        mode=0 -> весь день корпус_1
-        mode=1 -> весь день корпус_2
-        mode=2 -> слоты <= boundary -> корпус_1, слоты > boundary -> корпус_2
-        mode=3 -> слоты <= boundary -> корпус_2, слоты > boundary -> корпус_1
-        """
-        plan = {}
-        for t in teachers: #Выбор учителя
-            for d in range(1, days+1):
-                mode = random.choice([0, 1, 2, 3, 4, 5]) #Рандомный выбор мода
-                if mode == 2 or  mode == 3:
-                    boundary = random.randint(1, slots_per_day - 1) #Рандомный выбор слота переходжа 
-                elif mode in [0, 1, 4, 5]:
-                    boundary = None
-                plan[(t.name, d)] = (mode % 2, boundary)
-        return plan
-        #dict[(t.name, d)] = (mode, boundary)
+        # Запуск прогресс-бара с учётом выбранного времени
+        self.start_progress_bar()
+        # Запуск создания расписания в отдельном потоке
+        timetable_thread = threading.Thread(target=self.make_timetable, daemon=True)
+        timetable_thread.start()
     
-    # 2) Генерация расписания
-    def generate_schedule(self, teachers, classes, multiplier, stage,
-                                  days=6, slots_per_day=8):
-
-        best_schedule = None
-        best_trans = None
-        best_teacher_day_plan = None
-
-        tasks = []
-        for class_info in classes:
-            for t_name, need in class_info.teacher_lessons.items():
-                tasks.append((class_info.name, t_name, need))
-
+    def start_progress_bar(self):
+        """Запускает автоматическое заполнение прогресс-бара в зависимости от времени (time в секундах)"""
+        self.progress_step = 0
+        self.max_progress_steps = self.time * 10  # 10 шагов в секунду (интервал 100 мс)
+        self.auto_update_enabled = True  # Флаг для автоматического обновления
+        self.root.after(100, self.update_progress_bar)
     
-        for _ in range(self.multiplier):
-
-            current_teacher_day_plan = self.generate_teacher_day_plan(teachers, days=6, slots_per_day=8)
-            random.shuffle(tasks)
-
-            current_schedule = {}
-            current_teacher_day_count = {}
-            count_left = 0  # сколько уроков суммарно не удалось поставить
-            # Проходим по задачам
-            for (cls_id, t_name, needed) in tasks:
-                self.con.execute("SELECT * FROM parallels WHERE id = ?", (int(cls_id), ))
-                cls_name = self.con.fetchone()[2] #Получение данных об уроках параллели
-                left = int(needed)
-                # Все day/slot в случайном порядке
-                all_day_slots = [(d, s) for d in range(1, days+1) for s in range(1, slots_per_day+1)]
-                random.shuffle(all_day_slots)
-
-                for (d, slot) in all_day_slots:
-                    if (d, slot) == (0, 0):
-                        continue
-
-                    if left <= 0:
-                        break
-                    # 1) Слот занят классом?
-                    if (d, slot, cls_name) in current_schedule:
-                        continue
-
-
-                    Cont = True
-
-
-                    # 2- 3) Найдем учителя и исключение?
-
-
-                    for teacher in t_name:
-                        tch_obj = None
-                        for t in teachers:
-                            if t.name == teacher:
-                                tch_obj = t
-                                break
-
-                        if tch_obj == None:
-                            Cont = False
-
-                        if (d, slot) in tch_obj.exceptions:
-                            Cont = False
-
-                    # 4) Лимит 8 уроков
-                    for teacher in t_name:
-                        day_cnt = current_teacher_day_count.get((teacher, d), 0)
-                        if day_cnt >= 8:
-                            Cont = False
-
-
-                    # 5) Корпус
-                    for teacher in t_name:
-                        c_bld = self.class_building_for_day(cls_name, d, self.group_1, stage)
-                        mode_boundary = current_teacher_day_plan[(teacher, d)]
-                        t_bld = self.get_teacher_building(mode_boundary, slot)
-                        if t_bld != c_bld:
-                            Cont = False
-
-                    # 6) Учитель не занят тем же слотом
-                    for (od, os, ocl), (oteacher, obld) in current_schedule.items():
-                        if od == d and os == slot and oteacher in t_name:
-                            Cont = False
-                            break
-
-                    if not Cont:
-                        continue
-
-                    # Ставим урок
-                    for i in range(0, len(all_day_slots)):
-                        if all_day_slots[i] == (d, slot):
-                            all_day_slots[i] = (0, 0)
-
-                    current_schedule[(d, slot, cls_id)] = (t_name, c_bld)
-                    current_teacher_day_count[(t_name, d)] = day_cnt + 1
-                    left -= 1
-
-                # Если осталось
-                count_left += left
-
-            # Теперь смотрим, если count_left==0, то все уроки расставили
-            if count_left == 0:
-                current_trans = self.schedule_trans(current_schedule)
-                if best_schedule is None:
-                    best_schedule = current_schedule
-                    best_trans = current_trans
-                    best_teacher_day_plan = current_teacher_day_plan
-                else:
-                    if current_trans < best_trans:
-                        best_schedule = current_schedule
-                        best_trans = current_trans
-            # Иначе -- не удалось расставить все, 
-            # не учитываем такое решение (или можно запоминать "самое полное"?)
-
-        return best_schedule, best_teacher_day_plan
-        #schedule: dict[(day, slot, class_name)] = (teacher_name, building).
-
-# 3) Проверка расписания + подсчёт переходов
-    def schedule_trans(self, schedule):
-        if schedule == None:
-            return None, []
-
-        teacher_trans = []
-        trans = 0
-
-        # teacher_day_usage: (teacher, day): [(slot, building)]
-        teacher_day_usage = {}
-        for (day_n, slot, class_name), (teacher_name, building) in schedule.items():
-            # Соберём все уроки этого учителя в этот день
-            for teacher in teacher_name:
-                if teacher_day_usage.get((teacher, day_n), False) is False:
-                    teacher_day_usage[(teacher, day_n)] = [(slot, building)]
-                else:
-                    teacher_day_usage[(teacher, day_n)].append((slot, building))
-
-        # Теперь для каждого (teacher, day) смотрим, были ли реальные переходы
-        for teacher in teacher_day_usage:
-            start_point = teacher_day_usage[teacher][0]
-            for slot_bulding in teacher_day_usage[teacher]:
-                if slot_bulding[1] != start_point[1]:
-                    teacher_trans.append((teacher[0], teacher[1]))
-                    trans += 1
-                    break    
-        return trans, teacher_trans
-
-
-
-# 2 ЭТАП АЛГОРИТМ_2
-
-# schedule: dict[(day, slot, class_name)] = (teacher_id, building).
-# teacher_day_plan: dict[(teacher_id, day)] = (mode, boundary)
-# teacher_trans: [(teacher, day)...]
-# tasks: [(current_slot, class_id)]
-
-    def local_search(self, schedule, teacher_day_plan, cost, teacher_trans, multiplier, stage, teacherss):
-        """
-        schedule: dict[(day, slot, class_name)] = (teacher_id, building)
-        teacher_day_plan: dict[(teacher_id, day)] = (mode, boundary)
-        cost: текущее число переходов
-        teacher_trans: список [(teacher_name, day), ...], где teacher имеет переход
-        multiplier: число итераций (делим на 3 для каких-то жадных переборов)
-        stage: режим, как классы распределяются по корпусам
-        teacherss: список объектов Teacher
-        """
-        # Если уже нет переходов, можем вернуть текущее расписание
-        if cost == 0:
-            return schedule, cost
-        if cost is None:
-            return None, None
-
-        # Сохраняем "предыдущее" (исходное) состояние
-        prev_schedule = dict(schedule)
-        prev_teacher_day_plan = dict(teacher_day_plan)
-        prev_cost = cost
-        prev_teacher_trans = list(teacher_trans)
-
-        # Локальный проход по всем учителям-дням, у кого есть переход
-        # (teacher_tran, day_of_tran)
-        local_best_schedule = None
-        local_best_cost = None
-
-        for (teacher_tran, day_of_tran) in prev_teacher_trans:
-
-
-            # Собираем "tasks" = список уроков (slot, class_name) учителя teacher_tran в day_of_tran
-            tasks = []
-            cont = True
-            for (day, slot, class_name), (teachers_id, building) in prev_schedule.items():
-                for teacher_id in teachers_id:
-                    if teachers_id > 1:
-                        cont = False
-                    if day == day_of_tran and teachers_id == teacher_tran:
-                        tasks.append((slot, class_name))
-            if not cont:
-                continue
-
-            # Находим объект учителя
-            body_teacher = None
-            for teacher_obj in teacherss:
-                if teacher_obj.name == teacher_tran:
-                    body_teacher = teacher_obj
-                    break
-
-            # Сортируем по slot
-            tasks.sort(key=lambda x: x[0])
-
-            # Старые настройки (mode, boundary) учителя
-            settings = prev_teacher_day_plan[(teacher_tran, day_of_tran)]
-
-            # Пробуем new_mode = [0, 1] (весь день в корпус 1 или корпус 2)
-            for new_mode in [0, 1]:
-                # Делаем копию plan, schedule и счётчиков
-                current_teacher_day_plan = dict(prev_teacher_day_plan)
-                current_schedule = dict(prev_schedule)
-                current_teacher_day_count = {}
-
-                # Ставим учителю новый режим
-                current_teacher_day_plan[(teacher_tran, day_of_tran)] = (new_mode, None)
-
-                # В зависимости от старого settings (2,3) и нового (0,1) отбрасываем часть уроков?
-                # Ниже - ваша логика, отлаженная чуть лучше
-                boundary = settings[1]  # индекс "границы"
-
-                # tasks_... - "часть" уроков. Но будьте осторожны:
-                # tasks[:boundary], tasks[boundary:], etc.
-                # d - здесь не определено, заменим на day_of_tran при заполнении словаря
-                if settings[0] == 2 and new_mode == 0:
-                    # Был 2 (1->2), стало 0 (только 1)
-                    # Например, "tasks = tasks[boundary:]" ?
-                    # Но вы делали tasks[settings[1]::], смотрите внимательно
-                    tasks = tasks[ boundary : ]
-                elif settings[0] == 2 and new_mode == 1:
-                    # Был 2 (1->2), стало 1 (только 2)
-                    tasks = tasks[ : boundary ]
-                elif settings[0] == 3 and new_mode == 0:
-                    # Был 3 (2->1), стало 0 (только 1)
-                    tasks = tasks[ : boundary ]
-                elif settings[0] == 3 and new_mode == 1:
-                    # Был 3 (2->1), стало 1 (только 2)
-                    tasks = tasks[ boundary : ]
-
-                # Удаляем из current_schedule уроки, которые были у этого учителя в этот день
-                # (раз мы сейчас будем заново их ставить)
-                for (slot, cls_name) in tasks:
-                    key_ = (day_of_tran, slot, cls_name)
-                    if key_ in current_schedule:
-                        del current_schedule[key_]
-
-                # Пытаемся заново поставить эти tasks
-                # multiplier / 3 -> нужно int(...)
-
-
-                # Будем считать, сколько из tasks реально поставили
-                # (или "count == len(tasks)")
-
-                for _ in range(int(multiplier // 3)):
-                    random.shuffle(tasks)
-                    placed_count = 0
-
-                    for (slottt, cls_id) in tasks:
-                        # Получаем "cls_name" из базы:
-                        self.con.execute("SELECT * FROM parallels WHERE id = ?", (int(cls_id[0]), ))
-                        row = self.con.fetchone()
-                        if not row:
-                            # возможно cls_id не найден?
-                            continue
-                        cls_name = row[2]  # допустим, там в 3-й колонке имя
-                        # Перебираем day/slot (все?)
-                        all_day_slots = [(ddd, sss) for ddd in range(1, 3) for sss in range(1, 9)]
-                        random.shuffle(all_day_slots)
-
-                        for (ddd, sss) in all_day_slots:
-                            if (ddd, sss) == (0,0):
-                                continue
-                            
-                            # Если уже все поставили
-                            if placed_count == len(tasks):
-                                break
-                            
-                            # 1) Слот занят классом?
-                            if (ddd, sss, cls_name) in current_schedule:
-                                continue
-                            
-                            # 2) Исключение?
-                            if (ddd, sss) in body_teacher.exceptions:
-                                continue
-                            
-                            # 3) Лимит 8 уроков
-                            day_cnt = current_teacher_day_count.get((teacher_tran, ddd), 0)
-                            if day_cnt >= 8:
-                                continue
-                            
-                            # 4) Корпус
-                            c_bld = self.class_building_for_day(cls_name, ddd, self.group_1, stage)
-                            # mode_boundary = (new_mode, None)? 
-                            # Но вы используете current_teacher_day_plan[(teacher_tran, ddd)]:
-                            mb = current_teacher_day_plan.get((teacher_tran, ddd), (new_mode, None))
-                            t_bld = self.get_teacher_building(mb, sss)
-                            if t_bld != c_bld:
-                                continue
-                            
-                            # 5) Проверяем, не занят ли учитель (teacher_tran) в (ddd, sss)
-                            conflict_found = False
-                            for (od, os, ocl), (oteacher, obld) in current_schedule.items():
-                                if od == ddd and os == sss and oteacher[0] == teacher_tran :
-                                    conflict_found = True
-                                    break
-                            if conflict_found:
-                                continue
-                            
-                            # Если всё ок:
-                            current_schedule[(ddd, sss, cls_name)] = ((teacher_tran), c_bld)
-                            current_teacher_day_count[((teacher_tran), ddd)] = day_cnt + 1
-                            placed_count += 1
-                            break  # выходим из цикла all_day_slots (ставим 1 урок)
-                        
-                    # После попытки расстановки "tasks":
-                    local_cost_now, local_teacher_trans = self.schedule_trans(current_schedule)
-
-                    # Если удалось поставить все:
-                    if placed_count == len(tasks):
-                        # либо у нас вообще local_best_cost ещё None:
-                        if local_best_cost is None or local_cost_now < local_best_cost:
-                            local_best_cost = local_cost_now
-                            local_best_schedule = dict(current_schedule)
-                    else:
-                        # Даже если не все, может всё равно cost лучше?
-                        if local_best_cost is None or local_cost_now < local_best_cost:
-                            local_best_cost = local_cost_now
-                            local_best_schedule = dict(current_schedule)
-
-        # После обхода всех учителей/дней/модов – сравним local_best_cost и prev_cost
-        if local_best_cost is not None and local_best_cost < prev_cost:
-            # Улучшение
-            return local_best_schedule, local_best_cost
+    def update_progress_bar(self):
+        """Обновляет прогресс-бар и планирует следующее обновление"""
+        # Если автоматическое обновление отключено, не обновляем
+        if not self.auto_update_enabled:
+            return
+            
+        if self.progress_step < self.max_progress_steps:
+            progress_percent = (self.progress_step / self.max_progress_steps) * 100
+            self.progress_var.set(progress_percent)
+            self.progress_text.config(text=f"{int(progress_percent)}%")
+            
+            self.progress_step += 1
+            self.root.after(100, self.update_progress_bar)
         else:
-            # Нет улучшения – вернём старые
-            return prev_schedule, prev_cost
-
-# *) Получение расписания
- 
-    def getting_the_timetable(self, teachers, classes, multiplier, days = 6, slots_per_day = 8):
-
-        schedule_list = []
-        cost_list = []
-
-        # print("1//////////////////")
-        best_schedule_1, best_teacher_day_plan_1 = self.generate_schedule(teachers, classes, multiplier, 1, days, slots_per_day)
-        cost_1, teacher_trans_1 = self.schedule_trans(best_schedule_1)
-
-        # print(f"Расписание: {best_schedule_1}", end="\n")
-        # print(f"Переходов: {cost_1}, Кто именно: {teacher_trans_1}")
-
-        # print("------------------")
-
-        end_schedule_1, end_cost_1  = self.local_search(best_schedule_1, best_teacher_day_plan_1, cost_1, teacher_trans_1, multiplier, 1, teachers)
-        # print(f"Расписание: {end_schedule_1}", end="\n")
-        # print(f"Переходов: {end_cost_1}")
-        if end_schedule_1:
-            schedule_list.append(end_schedule_1)
-            cost_list.append(end_cost_1)
-            if end_cost_1 == 0:
-                return end_schedule_1, end_cost_1
-
-
-        # print("2//////////////////")
-
-        best_schedule_2, best_teacher_day_plan_2 = self.generate_schedule(teachers, classes, multiplier, 2, days=6, slots_per_day=8)
-        cost_2, teacher_trans_2 = self.schedule_trans(best_schedule_2)
-        # print(f"Расписание: {best_schedule_2}", end="\n")
-        # print(f"Переходов: {cost_2}, Кто именно: {teacher_trans_2}")
-
-        # print("------------------")
-
-        end_schedule_2, end_cost_2  = self.local_search(best_schedule_2, best_teacher_day_plan_2, cost_2, teacher_trans_2, multiplier, 1, teachers)
-        # print(f"Расписание: {end_schedule_2}", end="\n")
-        # print(f"Переходов: {end_cost_2}")
-        if end_schedule_2:
-            schedule_list.append(end_schedule_2)
-            cost_list.append(end_cost_2)
-            if end_cost_2 == 0:
-                return end_schedule_2, end_cost_2
-
-
-        # print("3//////////////////")
-
-        best_schedule_3, best_teacher_day_plan_3 = self.generate_schedule(teachers, classes, multiplier, 3, days=6, slots_per_day=8)
-        cost_3, teacher_trans_3 = self.schedule_trans(best_schedule_3)
-        # print(f"Расписание: {best_schedule_3}", end="\n")
-        # print(f"Переходов: {cost_3}, Кто именно: {teacher_trans_3}")
-
-        # print("------------------")
-
-        end_schedule_3, end_cost_3  = self.local_search(best_schedule_3, best_teacher_day_plan_3, cost_3, teacher_trans_3, multiplier, 1, teachers)
-        # print(f"Расписание: {end_schedule_3}", end="\n")
-        # print(f"Переходов: {end_cost_3}")
-        if end_schedule_3:
-            schedule_list.append(end_schedule_3)
-            cost_list.append(end_cost_3)
-            if end_cost_3 == 0:
-                return end_schedule_3, end_cost_3
-
-
-        # print("4//////////////////")
-
-        best_schedule_4, best_teacher_day_plan_4 = self.generate_schedule(teachers, classes, multiplier, 4, days=6, slots_per_day=8)
-        cost_4, teacher_trans_4 = self.schedule_trans(best_schedule_4)
-        # print(f"Расписание: {best_schedule_4}", end="\n")
-        # print(f"Переходов: {cost_4}, Кто именно: {teacher_trans_4}")
-
-        # print("------------------")
-
-        end_schedule_4, end_cost_4  = self.local_search(best_schedule_4, best_teacher_day_plan_4, cost_4, teacher_trans_4, multiplier, 1, teachers)
-        # print(f"Расписание: {end_schedule_4}", end="\n")
-        # print(f"Переходов: {end_cost_4}")
-        if end_schedule_4:
-            schedule_list.append(end_schedule_4)
-            cost_list.append(end_cost_1)
-            if end_cost_4 == 0:
-                return end_schedule_4, end_cost_4
-
-        cost_list = [end_cost_1, end_cost_2, end_cost_3, end_cost_4]
-
-        if schedule_list:
-            min_cost = min(cost_list)
-            for i in range(0, len(cost_list)):
-                if cost_list[i] == min_cost:
-                    return schedule_list[i], min_cost
-        else: 
-            return None, None
-        
-
-
-# 3 ЭТАП ВЫБОР УРОКА И КАБА    
-
-    def getting_lessons_and_rooms(self):
-        # Шаг 1: получаем schedule
-        schedule, cost = self.getting_the_timetable(self.teachers, self.classes, self.multiplier, days= 6, slots_per_day=8)
-
-        ### Все про учителей
-        teacher_lessons = {}
-        # teacher_lessons: dict[(teacher_id, class_id)] = [(number_hours, lesson)]
-        self.con.execute("""SELECT * FROM lessons""")
-        list_lessons = self.con.fetchall()
-        for (id_lesson, Id_parallel, Subject, Hours, Id_teacher) in list_lessons:
-            if teacher_lessons.get((Id_teacher, Id_parallel), False) is False:
-                teacher_lessons[(Id_teacher, Id_parallel)] = [(Hours, Subject)]
-            else:
-                teacher_lessons[(Id_teacher, Id_parallel)].append((Hours, Subject))
-        ###
-
-        ### Все про кабинеты
-        # room_lesson: dict[((building_name, size),(tuple_of_subjects))] = ["room_1", ... , "room_n"]
-        room_lesson = {}
-
-        # list_room_without_subject: dict[((building_name, size),(tuple(...)))] = ["room_1", ... , "room_n"]
-        #   здесь "Subject" == "Нет приоритетных кабинетов"
-        list_room_without_subject = {}
-
+            self.progress_var.set(100)
+            self.progress_text.config(text="100%")
+    
+    def update_progress_manual(self, percent):
+        """Ручное обновление прогресс-бара из алгоритма создания расписания (0-100)"""
+        self.auto_update_enabled = False  # Отключаем автоматическое обновление
+        self.progress_var.set(percent)
+        self.progress_text.config(text=f"{int(percent)}%")
+        self.root.update()  # Обновляем UI немедленно
+    
+    def _show_success_popup(self):
+        """Безопасно показать popup успеха в главном потоке"""
+        warning = popup(self.root, "Откройте входные данные", "Успех")
+        warning.root.mainloop()
+    
+    def _show_error_popup(self):
+        """Безопасно показать popup ошибки в главном потоке"""
+        warning = eror_popup(self.root, "Конфликтующие вход. данные")
+        warning.root.mainloop()
+    ###
+    def make_timetable(self):
+    #Входные данные
+        #Кабинеты
+        rooms = [] #####
+   
+        # id, Number TEXT, Graph_or_Lyceum TEXT, Big_or_Small TEXT, Subject TEXT
         self.con.execute("""SELECT * FROM rooms""")
-        list_rooms = self.con.fetchall()
-        for room in list_rooms:
-            room_id       = room[0]
-            number        = room[1]  
-            building_name = room[2] 
-            size          = room[3] 
-            subjects_str  = room[4]  
+        values = self.con.fetchall()
 
-            if subjects_str != "Нет приоритетных кабинетов":
-                # Преобразуем список предметов в tuple
-                subjects_tuple = tuple(subjects_str.split("/"))
-                key = ((building_name, size), subjects_tuple)
-                if key not in room_lesson:
-                    room_lesson[key] = [number]
-                else:
-                    room_lesson[key].append(number)
+        for r in values:
+            if r[2] == "Графский":
+                b = 2
             else:
-                # Нет приоритетных кабинетов
-                # Чтобы было единообразно, пусть тоже будет tuple
-                subjects_tuple = tuple([subjects_str])  # фактически ("Нет приоритетных кабинетов",)
-                key = ((building_name, size), subjects_tuple)
-                if key not in list_room_without_subject:
-                    list_room_without_subject[key] = [number]
-                else:
-                    list_room_without_subject[key].append(number)
+                b = 1
+            if r[4] == "Нет приоритетных кабинетов":
+                r_ = "Нет прио"
+            else:
+                r_ = r[4]
+            rooms.append(
+                {
+                    "name": r[1],
+                    "building": b,
+                    "prio": r_,
+                    "size": r[3]
+                }
+            )
+        ##
 
-        # Словари для занятых комнат по корпусам
-        # вместо occupied_rooms_biulding_1 и occupied_rooms_biulding_2
-        occupied_rooms_building = {
-            1: {},
-            2: {}
+        #Физра в слотах
+        ful_day_to_short = {
+            "Понедельник": "Пн",
+            "Вторник": "Вт",
+            "Среда": "Ср",
+            "Четверг":"Чт",
+            "Пятница":"Пт",
+            "Суббота":"Сб",
         }
 
-        ### Формируем выход
-        output_schedule = {} 
-        # schedule: dict[(day, slot, class_id)] = (teacher_ids, building)
-        # output_schedule: dict[(day, slot, class_id)] = (subject, teacher_ids, rooms, building)
 
-        for (day, slot, class_id), (teacher_ids, building) in schedule.items():
-            # 1) Уменьшаем счётчик часов + определяем subject_output
-            subject_output = None
-            # teacher_ids может быть (teacher_id,) или (teacher1, teacher2)
-            # Найдём подходящий предмет
-            if len(teacher_ids) > 0:
-                t_main = teacher_ids[0]
-                # Перебираем в teacher_lessons[(t_main, class_id)] список (Hours, Subject)
-                if (t_main, class_id) in teacher_lessons:
-                    for i in range(len(teacher_lessons[(t_main, class_id)])):
-                        hours_left_str, subj = teacher_lessons[(t_main, class_id)][i]
-                        if hours_left_str != "0":
-                            subject_output = subj
-                            new_hours = str(int(hours_left_str) - 1)
-                            teacher_lessons[(t_main, class_id)][i] = (new_hours, subj)
-                            break
+        busy_phy = {} #######
+        self.con.execute("""SELECT * FROM parallels""")
+        values_p = self.con.fetchall()
+        
+        id_to_clas = {}
+        for c in values_p:
+            id_to_clas[str(c[0])] = f"{c[2]}{c[1]}"
 
-            # Если не нашли, условно пусть будет "Неизвестный" (или None)
-            if not subject_output:
-                subject_output = "Неизвестный"
+        for c in values_p:
+            busy_phy[f"{c[2]}{c[1]}"] = {
+                "Пн": [],
+                "Вт": [],
+                "Ср": [], 
+                "Чт": [],
+                "Пт": [],
+                "Сб": []
+                }
+        self.con.execute("""SELECT * FROM pe""")
+        values = self.con.fetchall()    
+        for slot_pe in values:
+            busy_phy[id_to_clas[slot_pe[1]]][ful_day_to_short[slot_pe[3]]].append(int(slot_pe[4]))
+        ###
+        # print(busy_phy)
+        #Доп уроки
+        extra_les = {}
+        for c in values_p:
+            extra_les[f"{c[2]}{c[1]}"] = []
 
-            # 2) Определяем, сколько аудиторий нужно
-            needed_rooms = len(teacher_ids)  # 1 или 2
-            # 3) Берём словарь занятых аудиторий для нужного корпуса
-            current_occupied = occupied_rooms_building[building]
-            if (day, slot) not in current_occupied:
-                current_occupied[(day, slot)] = []
+        
+        self.con.execute("""SELECT * FROM extra""")
+        values_e = self.con.fetchall()    
+        for ext in values_e:
+            extra_les[id_to_clas[str(ext[1])]].append(ext[2])
+        # print(extra_les)   
+        ###
 
-            # 4) Пытаемся найти подходящие аудитории
-            end_1_1 = False
-            end_1_2 = False
-            end_2_1 = False
-            end_2_2 = False
+        #Учителя
+        teachers = export_teachers_to_schedule_format(self.base)
+        
+        # print(teachers)
+        #Классы
+        classes = export_classes_to_schedule_format(self.base, (self.group_1, self.group_2))
+        # print(classes)
+        print(classes)
 
-            list_rooms_out_put = []
+        buildings = ["1", "2"]
+#Лицей, Графский
 
-            # --- ПЕРВЫЙ проход: ищем в приоритетных (room_lesson)
-            for data_room, rooms_list in room_lesson.items():
-                (bld_name, size) = data_room[0]
-                subjects_tuple   = data_room[1]
+        days = ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб"]
 
-                # Определим building_room = 1 или 2
-                if bld_name == "Графский":
-                    building_room = 2
+        periods_per_day = 8
+
+        # --------------------------------------------
+        # 2. Создаем модель
+        # --------------------------------------------
+        model = cp_model.CpModel()
+
+        # x[учитель, класс, корпус, день, урок]
+
+
+        x = {}
+        for c in classes:
+            for s in c['subjects']:
+                for d in days:
+                    for p in range(1, periods_per_day + 1):
+                        x[(s["teacher"], c["name"], c["buildings"][d], d, p)] = model.NewBoolVar(f"{s["teacher"]}_{c['name']}_{c["buildings"][d]}_{d}_{p}")
+
+        # --------------------------------------------
+        # 3. Ограничения
+        # --------------------------------------------
+
+        # 3.1 Учебный план (все часы должны быть выполнены)
+        for c in classes:
+            for s in c["subjects"]:
+                model.Add(
+                    sum(
+                        x[(s["teacher"], c["name"], c['buildings'][d], d, p)]
+                        for d in days
+                        for p in range(1, periods_per_day + 1)
+                    ) == s['hours']
+                )
+
+        for c in classes:
+            for d in days:
+                for p in range(1, periods_per_day + 1):
+                    model.Add(
+                        sum(
+                            x[(s['teacher'], c["name"], c['buildings'][d], d, p)]
+                            for s in c['subjects']
+                        ) <= 1
+                    )
+        ##
+
+
+        # 3.3 Учитель не может вести два урока одновременно
+        # Сначала соберём, кто в каких классах преподаёт
+        teacher_to_classes = {}
+        for c in classes:
+            for s in c["subjects"]:
+                if s['teacher'][0] != "-":
+                    teacher_to_classes.setdefault(s["teacher"], []).append(c)
+
+        # Теперь для каждого учителя и каждого слота (день, урок) не более одного урока
+        for tname, class_list in teacher_to_classes.items():
+            for d in days:
+                for p in range(1, periods_per_day + 1):
+                
+                    vars_ = [x[(tname, c["name"], c["buildings"][d], d, p)] for c in class_list]
+
+                    if (tname == ('Пятибратова К.В.',) and d == "Пт" and p == 1) or (tname == ('Пятибратова К.В.',) and d == "Сб" and p == 8):
+                        model.Add(sum(vars_) <= 2)   # разрешили 2
+                    else:
+                        model.Add(sum(vars_) <= 1)   # всем остальным 1
+
+
+        ###
+
+
+        # 3.4 Учитель не может вести при его исключении
+        for c in classes:
+            for s in c['subjects']:
+                for t1 in s['teacher']:
+                    for t2 in teachers:
+                        if t2['name'] == t1:
+                            for d, periods in t2['exce'].items():
+                                for p in periods:
+                                    model.Add(x[(s['teacher'], c['name'], c["buildings"][d], d, p)] == 0)
+        #
+
+        # # # 3.5 Не может быть окон у классов
+        lesson = {}
+        for c in classes:
+            cname = c["name"]
+            for d in days:
+                # 1) Индикация «есть ли урок в слоте p» для класса cname в день d
+                for p in range(1, periods_per_day + 1):
+                    lesson[(cname, d, p)] = model.NewBoolVar(f"lesson_{cname}_{d}_{p}")
+                    model.Add(
+                        sum(
+                            x[(s["teacher"], cname, c["buildings"][d], d, p)]
+                            for s in c["subjects"]
+                        )
+                        == lesson[(cname, d, p)]
+                    )
+                # 2) Для любой пары слотов i<j с хотя бы одним промежуточным k
+                #    требуем, чтобы если в i и в j уроки, 
+                #    то во всех k между ними тоже был урок
+                for i in range(1, periods_per_day + 1):
+                    for j in range(i + 2, periods_per_day + 1):
+                        for k in range(i + 1, j):
+                            # если lesson[i]=lesson[j]=1, то LHS=1 => lesson[k] ≥1
+                            model.Add(
+                                lesson[(cname, d, i)]
+                              + lesson[(cname, d, j)]
+                              - 1
+                              <= lesson[(cname, d, k)]
+                            )
+
+        # 3.6 Не может быть больше 2 предметов одной группы
+        for c in classes:
+            dic_lesson = {}
+            for s in c['subjects']:
+                # s["teacher"] всегда кортеж (см. структуру данных)
+                if s['name'].endswith("В"):
+                    name = s['name'][:-1]
                 else:
-                    building_room = 1
+                    name = s['name']
+                dic_lesson.setdefault(name, []).append(s["teacher"])  # просто s["teacher"], без ()
 
-                # Проверяем тот ли это корпус
-                if building_room != building:
-                    continue
-                # Фильтруем "Маленькие" аудитории (если они не нужны)
-                if size == "Маленький":
-                    # Если вы не хотите маленькие — пропускаем
-                    continue
+            for d in days:
+                for sub, list_t in dic_lesson.items():
+                    model.Add(
+                        sum(
+                            x[(t, c['name'], c["buildings"][d], d, p)]
+                            for p in range(1, periods_per_day + 1)
+                            for t in list_t
+                        ) <= 2
+                    )
 
-                # Проверка на предмет (subject_output должен быть в subjects_tuple)
-                if subject_output not in subjects_tuple:
-                    continue
+        #3.7 Как миниум 6 уроков в день
+        # for c in classes:
+        #     for d in days:
+        #         model.Add(
+        #             sum(
+        #                 x[(s['teacher'], c["name"], c["buildings"][d], d, p)]
+        #                 for p in range(1, periods_per_day + 1)
+        #                 for s in c['subjects']
+        #             ) >= 5
+        #         )
 
-                # Теперь ищем нужное кол-во свободных комнат
-                if needed_rooms == 1:
-                    # Ищем первую свободную
-                    for r in rooms_list:
-                        if r not in current_occupied[(day, slot)]:
-                            current_occupied[(day, slot)].append(r)
-                            room_output = r
-                            end_1_1 = True
-                            break
-                    if end_1_1:
-                        break
-                else:
-                    # Нужны 2 аудитории
-                    for r in rooms_list:
-                        if r not in current_occupied[(day, slot)]:
-                            list_rooms_out_put.append(r)
-                            current_occupied[(day, slot)].append(r)
-                            if len(list_rooms_out_put) == 2:
-                                end_1_2 = True
-                                break
-                    if end_1_2:
-                        break
 
-            # --- ВТОРОЙ проход, если ещё не набрали (room_lesson не помог)
-            if needed_rooms == 1 and not end_1_1:
-                # Ищем в list_room_without_subject
-                for data_room, rooms_list in list_room_without_subject.items():
-                    (bld_name, size) = data_room[0]
-                    # здесь data_room[1] обычно = ("Нет приоритетных кабинетов",)
+        # 3.8 Нет первых двух уроков в пон
+        for c in classes:
+            for s in c["subjects"]:
+                model.Add(
+                    sum(
+                        x[(s["teacher"], c["name"], c['buildings']["Пн"], "Пн", p)]
+                        for p in range(1, 3)
+                    ) == 0
+                )
 
-                    if bld_name == "Графский":
-                        building_room = 2
-                    else:
-                        building_room = 1
+        # 3.10 Ограничение на жесткие пары у англ
 
-                    if building_room != building:
-                        continue
-                    if size == "Маленький":
-                        continue
-
-                    for r in rooms_list:
-                        if r not in current_occupied[(day, slot)]:
-                            current_occupied[(day, slot)].append(r)
-                            room_output = r
-                            end_2_1 = True
-                            break
-                    if end_2_1:
-                        break
-
-            if needed_rooms == 2 and not end_1_2:
-                # Ищем в list_room_without_subject
-                for data_room, rooms_list in list_room_without_subject.items():
-                    (bld_name, size) = data_room[0]
-
-                    if bld_name == "Графский":
-                        building_room = 2
-                    else:
-                        building_room = 1
-
-                    if building_room != building:
-                        continue
-                    if size == "Маленький":
-                        continue
-
-                    for r in rooms_list:
-                        if r not in current_occupied[(day, slot)]:
-                            list_rooms_out_put.append(r)
-                            current_occupied[(day, slot)].append(r)
-                            if len(list_rooms_out_put) == 2:
-                                end_2_2 = True
-                                break
-                    if end_2_2:
-                        break
-
-            # --- ТРЕТИЙ проход (fallback): если по-прежнему нет аудитории
-            # (или только 1 из 2)
-            # Для упрощения – дублируем небольшую логику
-            if needed_rooms == 1 and not (end_1_1 or end_2_1):
-                # Ищем любую аудиторию в room_lesson (без проверки subject)
-                # или повторно перебираем всё что есть
-                for data_room, rooms_list in room_lesson.items():
-                    (bld_name, size) = data_room[0]
-                    if bld_name == "Графский":
-                        building_room = 2
-                    else:
-                        building_room = 1
-                    if building_room != building:
-                        continue
-
-                    for r in rooms_list:
-                        if r not in current_occupied[(day, slot)]:
-                            current_occupied[(day, slot)].append(r)
-                            room_output = r
-                            break
-                    else:
-                        # если не нашли в этом data_room, идём к следующему
-                        continue
-                    # если вышли отсюда, значит аудитория найдена
+        pair_engl = {}
+        for c in classes:
+            cname = c["name"]
+            
+            # Находим учителя англ для этого класса
+            teacher = None
+            for s in c["subjects"]:
+                if s["name"] == "Англ":
+                    teacher = s['teacher']
                     break
+            
+            # Если англ не найден, пропускаем класс
+            if teacher is None:
+                continue
+            
+            for d in days:
+                for p in range(2, periods_per_day + 1):
+                    pair_engl[(cname, d, p, p - 1)] = model.NewBoolVar(f"clas_{cname}_day_{d}_p2_{p}_p1_{p - 1}")
+                    model.Add(
+                        sum(
+                            x[(teacher, cname, c["buildings"][d], d, k)]
+                            for k in range(p - 1, p + 1)
+                        ) == 2
+                    ).OnlyEnforceIf(pair_engl[(cname, d, p, p - 1)])
+                    model.Add(
+                        sum(
+                            x[(teacher, cname, c["buildings"][d], d, r)]
+                            for r in range(p - 1, p + 1)
+                        ) < 2
+                    ).OnlyEnforceIf(pair_engl[(cname, d, p, p - 1)].Not())
+            model.Add(
+                sum(
+                    pair_engl[(cname, d, p, p - 1)]
+                    for d in days
+                    for p in range(2, periods_per_day + 1)
+                ) == 1
+            )
 
-                output_schedule[(day, slot, class_id)] = (subject_output, teacher_ids, room_output, building)
 
-            elif needed_rooms == 1 and (end_1_1 or end_2_1):
-                # Уже нашли одну аудиторию
-                output_schedule[(day, slot, class_id)] = (subject_output, teacher_ids, room_output, building)
+        # 3.11 Физра в конкретных слотах
 
-            elif needed_rooms == 2 and not (end_1_2 or end_2_2):
-                # Значит ещё не успели добрать 2 аудитории
-                # Пытаемся добрать в room_lesson вообще любые 2
-                for data_room, rooms_list in room_lesson.items():
-                    (bld_name, size) = data_room[0]
-                    if bld_name == "Графский":
-                        building_room = 2
-                    else:
-                        building_room = 1
-                    if building_room != building:
+        for c in classes:
+            # Находим предмет "Физра" для этого класса
+            phy_subject = None
+            for s in c['subjects']:
+                if s['name'] == "Физра":
+                    phy_subject = s
+                    break
+                
+            if phy_subject is None:
+                continue  # Пропускаем классы без физры
+            
+            teacher_phy = phy_subject['teacher']
+            num_phy = phy_subject['hours']
+
+            # Проверяем, есть ли класс в busy_phy
+            if c['name'] not in busy_phy:
+                continue
+            
+            # Создаем список всех слотов для физры
+            all_phy_slots = []
+            for d in busy_phy[c['name']]:
+                for p in busy_phy[c['name']][d]:
+                    all_phy_slots.append((d, p))
+
+            # Добавляем ограничение: физра должна быть только в указанные слоты
+            # и количество уроков должно соответствовать num_phy
+            model.Add(
+                sum(
+                    x[(teacher_phy, c["name"], c['buildings'][d], d, p)]
+                    for d, p in all_phy_slots
+                ) == num_phy
+            )
+
+            # Запрещаем физру в другие слоты
+            for d in days:
+                for p in range(1, periods_per_day + 1):
+                    if (d, p) not in all_phy_slots:
+                        model.Add(
+                            x[(teacher_phy, c["name"], c['buildings'][d], d, p)] == 0
+                        )
+        #
+
+        # 3.12 в пон уроки с 3
+        for c in classes:
+            model.Add(
+                sum(
+                    x[(s["teacher"], c["name"], c['buildings']["Пн"], "Пн", 3)]
+                    for s in c["subjects"]
+                ) == 1
+            )
+
+        # 3.13 макс 1 урок инфы в корпусе 
+        for b in buildings:  
+            for d in days:  
+                for p in range(1, periods_per_day + 1):  
+                    infa_vars = []
+
+                    for c in classes:
+                        # берём только те классы, которые в этот день реально в этом корпусе
+                        if c["buildings"][d] != b:
+                            continue
+                        
+                        for s in c["subjects"]:
+                            if "Инфа" in s["name"]:
+                                infa_vars.append(x[(s["teacher"], c["name"], b, d, p)])
+
+                    if infa_vars:
+                        model.Add(sum(infa_vars) <= 1)
+
+        # 3.14 Не должно быть разрывов в парах
+
+        #Инициализация хэштаблицы самой важной здесь
+        pair_or_not_pair = {}
+
+        for c in classes:
+            cname = c["name"]
+            for s in c["subjects"]:
+                name_t = s['teacher']
+                for d in days:
+                    for p in range(1, periods_per_day - 1):
+                        pair_or_not_pair[(cname, d, name_t, p, p + 1)] = model.NewBoolVar(f"clas_{cname}_day_{d}_name_l{name_t}_p1_{p}_p2_{p + 1}")
+
+        for c in classes:
+            cname = c["name"]
+            for s in c["subjects"]:
+                t = s["teacher"]
+                for d in days:
+                    b = c["buildings"][d]
+                    for p in range(1, periods_per_day - 1):
+                        model.Add(
+                            sum(
+                                 x[(t, cname, b, d, z)]
+                                 for z in range(p, p + 2)
+                            ) == 2
+                        ).OnlyEnforceIf(pair_or_not_pair[(cname, d, t, p, p + 1)])
+                        model.Add(
+                            sum(
+                                 x[(t, cname, b, d, z)]
+                                 for z in range(p, p + 2)
+                            ) != 2
+                        ).OnlyEnforceIf(pair_or_not_pair[(cname, d, t, p, p + 1)].Not())
+        ###
+
+        #Хештаблица ровно 1 урок в день у учителя
+        have_a_les = {}
+        for c in classes:
+            cname = c["name"]
+            for s in c["subjects"]:
+                name_t = s['teacher']
+                for d in days:
+                        have_a_les[(cname, d, name_t)] = model.NewBoolVar(f"clas_{cname}_day_{d}_name_l{name_t}")
+
+        for c in classes:
+            cname = c["name"]
+            for s in c["subjects"]:
+                t = s["teacher"]
+                for d in days:
+                    b = c["buildings"][d]
+                    model.Add(
+                        sum(
+                             x[(t, cname, b, d, p)]
+                             for p in range(1, periods_per_day + 1)
+                        ) == 1
+                    ).OnlyEnforceIf(have_a_les[(cname, d, t)])
+                    model.Add(
+                        sum(
+                             x[(t, cname, b, d, p)]
+                             for p in range(1, periods_per_day + 1)
+                        ) != 1
+                    ).OnlyEnforceIf(have_a_les[(cname, d, t)].Not())
+        ###
+
+        #Хештаблица 0 уроков в день
+        not_have_a_les = {}
+        for c in classes:
+            cname = c["name"]
+            for s in c["subjects"]:
+                name_t = s['teacher']
+                for d in days:
+                        not_have_a_les[(cname, d, name_t)] = model.NewBoolVar(f"clas_{cname}_day_{d}_name_l{name_t}")
+
+        for c in classes:
+            cname = c["name"]
+            for s in c["subjects"]:
+                t = s["teacher"]
+                for d in days:
+                    b = c["buildings"][d]
+                    model.Add(
+                        sum(
+                             x[(t, cname, b, d, p)]
+                             for p in range(1, periods_per_day + 1)
+                        ) == 0
+                    ).OnlyEnforceIf(not_have_a_les[(cname, d, t)])
+                    model.Add(
+                        sum(
+                             x[(t, cname, b, d, p)]
+                             for p in range(1, periods_per_day + 1)
+                        ) != 0
+                    ).OnlyEnforceIf(not_have_a_les[(cname, d, t)].Not())
+        ###
+
+
+        for c in classes:
+            cname = c["name"]
+            for s in c["subjects"]:
+                for d in days:
+                    model.Add(sum
+                            (
+                    pair_or_not_pair[(cname, d, s["teacher"], p, p + 1)]
+                    for p in range(1, periods_per_day - 1)
+                        ) == 1
+                    ).OnlyEnforceIf([have_a_les[(cname, d, s["teacher"])].Not(), not_have_a_les[(cname, d, s["teacher"])].Not()])
+
+        # 3.15 Если это доп урок, то можно иметь 8 уроков
+
+        num_of_lessons = {}
+        for c in classes:
+            cname = c["name"]
+            for d in days:
+                num_of_lessons[(cname, d)] = model.NewIntVar(0, periods_per_day, f"lesson_{cname}_{d}")
+                model.Add(
+                    sum(
+                        x[(s["teacher"], cname, c["buildings"][d], d, p)]
+                        for s in c["subjects"]
+                        for p in range(1, periods_per_day + 1)
+                    ) == num_of_lessons[(cname, d)])
+
+        num_of_teacher = {}
+        for c in classes:
+            cname = c["name"]
+            for d in days:
+                for s in c["subjects"]:
+                    num_of_teacher[(cname, d, s["teacher"][0])] = model.NewBoolVar(f"lesson_{cname}_{d}_{s["teacher"][0]}")
+                    model.Add(
+                        sum(
+                            x[(s["teacher"], cname, c["buildings"][d], d, p)]
+                            for p in range(1, periods_per_day + 1)
+                        ) >= 1).OnlyEnforceIf(num_of_teacher[(cname, d, s["teacher"][0])])
+                    model.Add(
+                        sum(
+                            x[(s["teacher"], cname, c["buildings"][d], d, p)]
+                            for p in range(1, periods_per_day + 1)
+                        ) == 0).OnlyEnforceIf(num_of_teacher[(cname, d, s["teacher"][0])].Not())
+
+        eight_or_not = {}
+        state = {}#!!!!!!!!!!!!
+        add = {}#!!!!!!!!!!!!
+        for c in classes:
+            cname = c["name"]
+            if cname not in extra_les:
+                continue
+            
+            
+            ###Инициализация
+            stage = len(extra_les[cname])
+            for i_t in range(len(extra_les[cname])):
+                teacher = extra_les[cname][i_t]
+
+                add[(i_t, cname)] = model.NewBoolVar(f"add_{i_t}")
+                state[(i_t, cname)] = {
+                d: model.NewBoolVar(f"state_{cname}_{teacher}_{d}")
+                for d in days
+                }
+                for d in days:
+                    model.Add(state[(i_t, cname)][d] <= num_of_teacher[(cname, d, teacher)])
+
+            #Монотонность
+            for i_t in range(1, len(extra_les[cname])):
+                for d in days:
+                    model.Add(state[(i_t, cname)][d] >= state[(i_t - 1, cname)][d])
+
+            ###Преобразования
+            for i_t in range(1, len(extra_les[cname])):
+                model.Add(
+                    sum(state[(i_t, cname)][d] for d in days)
+                    - sum(state[(i_t - 1, cname)][d] for d in days)
+                    == add[(i_t, cname)]
+                )
+
+
+            for d in days:
+                eight_or_not[(d, cname)] = model.NewBoolVar(f"class_{cname}_day_{d}")
+                model.Add(sum(
+                            state[(i_t, cname)][d]
+                            for i_t in range(len(extra_les[cname]))
+                        )>= 1).OnlyEnforceIf(eight_or_not[(d, cname)])
+                model.Add(sum(
+                            state[(i_t, cname)][d]
+                            for i_t in range(len(extra_les[cname]))
+                        )==0).OnlyEnforceIf(eight_or_not[(d, cname)].Not())
+
+            for i_t in range(1, len(extra_les[cname])):
+                for d in days:
+                    model.Add(num_of_lessons[(cname, d)] <= 7).OnlyEnforceIf(eight_or_not[(d, cname)].Not())
+                    model.Add(num_of_lessons[(cname, d)] <= 8).OnlyEnforceIf(eight_or_not[(d, cname)])
+
+        #3.16 Икспб в конкретных слотах
+        # model.Add(x[(('Пятибратова К.В.',), "8А", "1", "Чт", 8)] == 1)
+        # model.Add(x[(('Пятибратова К.В.',), "8Б", "1", "Сб", 8)] == 1)
+        # model.Add(x[(('Пятибратова К.В.',), "8В", "1", "Сб", 8)] == 1)
+
+        # model.Add(x[(('Пятибратова К.В.',), "9А", "1", "Пт", 1)] == 1)
+        # model.Add(x[(('Пятибратова К.В.',), "9Б", "1", "Пт", 1)] == 1)
+        # model.Add(x[(('Пятибратова К.В.',), "9В", "2", "Чт", 1)] == 1)
+
+        # --------------------------------------------
+        # 4.0 Вспомогалки для оптимизации
+        # --------------------------------------------
+
+        # 1) Разворачиваем назначение: 
+        #    teacher_to_assignments[teacher_name] = list of (teacher_key, class_obj)
+        teacher_to_assignments = {}
+        for c in classes:
+            for s in c["subjects"]: # может быть строка или кортеж
+                for t in s["teacher"]:
+                    teacher_to_assignments.setdefault(t, []).append((s["teacher"], c))
+
+        # 2) Индикатор “есть ли урок у teacher_name в день d, период p”
+        lesson_t = {}
+        for teacher_name, assigns in teacher_to_assignments.items():
+            for d in days:
+                for p in range(1, periods_per_day + 1):
+                    lt = model.NewBoolVar(f"lesson_{teacher_name}_{d}_{p}")
+                    lesson_t[(teacher_name, d, p)] = lt
+
+                    s = sum(
+                        x[(tkey, cl["name"], cl["buildings"][d], d, p)]
+                        for (tkey, cl) in assigns
+                    )
+                    model.Add(s >= 1).OnlyEnforceIf(lt)
+                    model.Add(s == 0).OnlyEnforceIf(lt.Not())
+
+
+        # 3.17 Жёсткое ограничение: для каждого преподавателя с trans_1 == 1
+        # запрещается менять корпус сразу подряд (p → p+1) — т.е. переход без окна
+        for t in teachers:
+            if t.get("trans_1", 0) != 1:
+                continue
+            teacher_name = t["name"]
+            assigns = teacher_to_assignments.get(teacher_name, [])
+            if not assigns:
+                continue
+            for d in days:
+                for p in range(1, periods_per_day):
+                    for (tkey1, c1), (tkey2, c2) in product(assigns, assigns):
+                        b1 = c1["buildings"][d]
+                        b2 = c2["buildings"][d]
+                        if b1 == b2:
+                            continue  # не смена корпуса
+                        x1 = x[(tkey1, c1["name"], b1, d, p)]
+                        x2 = x[(tkey2, c2["name"], b2, d, p + 1)]
+                        # запретить одновременно урок в корпусе b1 на p и в другом корпусе b2 на p+1
+                        model.AddBoolOr([x1.Not(), x2.Not()])
+
+
+
+
+        # --------------------------------------------
+        # 4.1 Оптимизация переходов
+        # --------------------------------------------
+
+        # Штрафные переменные transitions[(teacher_name, d, p, q)]
+        transitions = {}
+        for teacher_name, assigns in teacher_to_assignments.items():
+            plus = 1
+            for t in teachers:
+                if t['name'] == teacher_name:
+                    if t.get('trans_1', 0) == 1:
+                        plus = 2  # требует хотя бы одного пустого периода между p и q
+                    break
+                
+            for d in days:
+                # для каждой пары уроков p<q, где между ними нет других уроков
+                for p in range(1, periods_per_day + 1):
+                    for q in range(p + plus, periods_per_day + 1):
+                        gap_clear = model.NewBoolVar(f"gap_clear_{teacher_name}_{d}_{p}_{q}")
+                        model.Add(
+                            sum(lesson_t[(teacher_name, d, k)] for k in range(p+1, q)) == 0
+                        ).OnlyEnforceIf(gap_clear)
+                        model.Add(
+                            sum(lesson_t[(teacher_name, d, k)] for k in range(p+1, q)) > 0
+                        ).OnlyEnforceIf(gap_clear.Not())
+
+                        # b) is_next = 1 ⇔ урок в p, урок в q и gap_clear
+                        is_next = model.NewBoolVar(f"is_next_{teacher_name}_{d}_{p}_{q}")
+                        model.AddBoolAnd([
+                            lesson_t[(teacher_name, d, p)],
+                            lesson_t[(teacher_name, d, q)],
+                            gap_clear
+                        ]).OnlyEnforceIf(is_next)
+                        model.AddBoolOr([
+                            lesson_t[(teacher_name, d, p)].Not(),
+                            lesson_t[(teacher_name, d, q)].Not(),
+                            gap_clear.Not()
+                        ]).OnlyEnforceIf(is_next.Not())
+
+                        # c) переход между корпусами
+                        tr = model.NewBoolVar(f"trans_{teacher_name}_{d}_{p}_{q}")
+                        transitions[(teacher_name, d, p, q)] = tr
+
+                        # d) проверяем смену корпуса через все сочетания назначений
+                        ors = []
+                        for (tkey1, c1), (tkey2, c2) in product(assigns, assigns):
+                            b1 = c1["buildings"][d]
+                            b2 = c2["buildings"][d]
+                            if b1 == b2:
+                                continue
+                            x1 = x[(tkey1, c1["name"], b1, d, p)]
+                            x2 = x[(tkey2, c2["name"], b2, d, q)]
+                            tmp = model.NewBoolVar(f"tmp_tr_{teacher_name}_{d}_{p}_{q}_{b1}_{b2}")
+                            model.AddBoolAnd([is_next, x1, x2]).OnlyEnforceIf(tmp)
+                            model.AddBoolOr([is_next.Not(), x1.Not(), x2.Not()]).OnlyEnforceIf(tmp.Not())
+                            ors.append(tmp)
+
+                        if ors:
+                            model.AddBoolOr(ors).OnlyEnforceIf(tr)
+                            model.AddBoolAnd([lit.Not() for lit in ors]).OnlyEnforceIf(tr.Not())
+        # --------------------------------------------
+        # 4.2 Оптимизация «окон»
+        # --------------------------------------------
+
+        windows = {}
+
+        for teacher_name, assigns in teacher_to_assignments.items():
+            for d in days:
+                # для каждой пары уроков p<q, где между ними нет других уроков
+                for p in range(1, periods_per_day + 1):
+                    for q in range(p + 1, periods_per_day + 1):
+                        if q != p + 1:
+                            # a) gap_clear = 1 ⇔ нет уроков между p и q
+                            gap_clear = model.NewBoolVar(f"gap_clear_{teacher_name}_{d}_{p}_{q}")
+                            model.Add(
+                                sum(lesson_t[(teacher_name, d, k)] for k in range(p+1, q)) == 0
+                            ).OnlyEnforceIf(gap_clear)
+                            model.Add(
+                                sum(lesson_t[(teacher_name, d, k)] for k in range(p+1, q)) > 0
+                            ).OnlyEnforceIf(gap_clear.Not())
+
+                            # b) is_next = 1 ⇔ урок в p, урок в q, и gap_clear
+                            is_next = model.NewBoolVar(f"is_next_{teacher_name}_{d}_{p}_{q}")
+                            model.AddBoolAnd([
+                                lesson_t[(teacher_name, d, p)],
+                                lesson_t[(teacher_name, d, q)],
+                                gap_clear
+                            ]).OnlyEnforceIf(is_next)
+                            model.AddBoolOr([
+                                lesson_t[(teacher_name, d, p)].Not(),
+                                lesson_t[(teacher_name, d, q)].Not(),
+                                gap_clear.Not()
+                            ]).OnlyEnforceIf(is_next.Not())
+
+                            # c) окнонная переменная
+                            wd = model.NewBoolVar(f"trans_{teacher_name}_{d}_{p}_{q}")
+                            windows[(teacher_name, d, p, q)] = wd
+
+                            # d) для каждого сочетания назначений проверяем смену корпуса
+                            ors = []
+                            for (tkey1, c1), (tkey2, c2) in product(assigns, assigns):
+                                b1 = c1["buildings"][d]
+                                b2 = c2["buildings"][d]
+                                x1 = x[(tkey1, c1["name"], b1, d, p)]
+                                x2 = x[(tkey2, c2["name"], b2, d, q)]
+                                if b1 != b2 and q == p + 2: #Не считать оконо если 1 урок под переход
+                                    continue
+                                tmp = model.NewBoolVar(f"tmp_tr_{teacher_name}_{d}_{p}_{q}_{b1}_{b2}")
+                                model.AddBoolAnd([is_next, x1, x2]).OnlyEnforceIf(tmp)
+                                model.AddBoolOr([is_next.Not(), x1.Not(), x2.Not()]).OnlyEnforceIf(tmp.Not())
+                                ors.append(tmp)
+
+                            # e) устанавливаем tr ↔ OR(ors)
+                            if ors:
+                                model.AddBoolOr(ors).OnlyEnforceIf(wd)
+                                model.AddBoolAnd([lit.Not() for lit in ors]).OnlyEnforceIf(wd.Not())
+
+        # --------------------------------------------
+        # 4.3 Оптимизация пар уроков
+        # --------------------------------------------
+        pairs = {}
+
+        teachers_to_assignments = {}
+        for c in classes:
+            for s in c["subjects"]: 
+                if s['hours'] != 1:
+                    teachers_to_assignments.setdefault(s['teacher'], []).append(c)
+
+        # 2.2) Индикатор “есть ли урок у teacher_name в день d, период p”
+        for teacher_name, class_list in teachers_to_assignments.items():
+            for d in days:
+                for p in range(1, periods_per_day):
+                    pair_var = model.NewBoolVar(f"pair_{teacher_name}_{d}_{p}_{p+1}")
+                    pairs[(teacher_name, d, p)] = pair_var
+
+                    # Пусть l_p = lesson_t[(teacher_name,d,p)], l_q = lesson_t[(teacher_name,d,p+1)]
+                    l_p = sum(x[(teacher_name, cl["name"], cl["buildings"][d], d, p)]
+                              for cl in class_list)
+                    l_q = sum(x[(teacher_name, cl["name"], cl["buildings"][d], d, p+1)]
+                              for cl in class_list)
+
+                    # Линейная связь pair_var ⇔ (l_p ≥1 ∧ l_q ≥1):
+                    # 1) pair_var ≤ (l_p ≥1)  и  pair_var ≤ (l_q ≥1)
+                    model.Add(l_p >= 1).OnlyEnforceIf(pair_var)
+                    model.Add(l_q >= 1).OnlyEnforceIf(pair_var)
+                    model.Add(pair_var <= l_p)    # если pair_var=1, l_p must be ≥1
+                    model.Add(pair_var <= l_q)    # if pair_var=1, l_q must be ≥1
+
+                    # 2) Если оба есть, то pair_var может быть 1, иначе он принудительно 0:
+                    #    l_p + l_q - 1 ≤ pair_var * 2
+                    #    но проще: l_p + l_q - 1 ≤ pair_var*2  ⟹ если l_p=l_q=1, RHS=2 ⇒ pair_var may be 1
+                    model.Add(l_p + l_q - 1 <= pair_var * 2)
+
+
+        # Целевая функция: минимизируем переходы, окна у учителей + макимизируем пары 
+        model.Minimize(
+            sum(transitions.values()) * 10 +
+            sum(windows.values()) * 4 - 
+            sum(pairs.values()) * 1
+        )
+
+
+        # --------------------------------------------
+        # 5. Решение 
+        # --------------------------------------------
+        solver = cp_model.CpSolver()
+        solver.parameters.max_time_in_seconds = self.time - 10
+        solver.parameters.log_search_progress = True
+        solver.parameters.cp_model_presolve = True
+        solver.parameters.num_search_workers = 7
+        solver.parameters.linearization_level = 2
+        solver.parameters.cp_model_probing_level = 0
+        status = solver.Solve(model)
+
+        if status == cp_model.OPTIMAL or status == cp_model.FEASIBLE:
+            self.root.after(0, lambda: self.update_progress_manual(100))
+            self.auto_update_enabled = False
+            self.root.after(0, lambda: self.in_process.config(text="Расписание создано"))
+            
+            print("Расписание составлено успешно!")
+
+            txt_output_windows = []
+            txt_output_trans = []
+
+            for (teacher, d, p, q), wind in windows.items():
+                if solver.Value(wind):
+                    txt_output_windows.append((teacher, d, p, q))
+            print(f"Окна у учителей: {len(txt_output_windows)}")
+            print(txt_output_windows)
+
+            for (teacher, d, p, q), trans in transitions.items():
+                if solver.Value(trans):
+                    txt_output_trans.append((teacher, d, p, q))
+            print(f"Переходы между корпусами: {len(txt_output_trans)}")
+            print(txt_output_trans)
+            print("-"*70)
+
+            # Собираем расписание в таблицу
+            schedule = []
+            for d in days:
+                for p in range(1, periods_per_day + 1):
+                    for c in classes:
+                        for s in c['subjects']:
+                            if solver.Value(x[(s["teacher"], c["name"], c["buildings"][d], d, p)]) == 1:
+                                            schedule.append({
+                                                "День": d,
+                                                "Урок": p,
+                                                "Класс": c["name"],
+                                                "Учитель": s["teacher"],
+                                                "Корпус": c["buildings"][d],
+                                                "Предмет": s['name']
+                                            })
+        else:
+            # Останавливаем прогресс-бар при ошибке
+            self.auto_update_enabled = False
+            print("Ошибка: Конфликтующие входные данные")
+            self.root.after(0, lambda: self._show_error_popup())
+            return
+
+        count = 0
+        for a in schedule:
+            # print(a)
+            count += 1
+        print(f"Кол-во уркоов до добавления кабинетов: {count}")
+
+        print("-"*70)
+        # --------------------------------------------
+        # 6. Выбор кабинета
+        # --------------------------------------------
+
+
+
+        # ==================== НАСТРОЙКА: фикс-кабинеты информатики ====================
+        # Корпус "1" -> ОТ_1 и ОТ_2 (для двух групп), корпус "2" -> 401 и 407
+        # Если у тебя реально другие названия — поменяй здесь.
+        INF_FIXED_BY_BUILDING = {
+            "1": ["ОТ_1", "ОТ_2"],
+            "2": ["401", "407"],
+        }
+
+        # ==================== НОРМАЛИЗАЦИЯ ДАННЫХ (обязательно) ====================
+        def norm_str(x):
+            return str(x).strip()
+
+        def norm_teachers(x):
+            # Учитель ВСЕГДА list[str]
+            if x is None:
+                return []
+            if isinstance(x, str):
+                s = x.strip()
+                return [s] if s else []
+            return [str(t).strip() for t in x if str(t).strip()]
+
+        # schedule
+        for l in schedule:
+            l["Класс"] = norm_str(l["Класс"])
+            l["День"] = norm_str(l["День"])
+            l["Урок"] = int(l["Урок"])                 # int
+            l["Корпус"] = norm_str(l["Корпус"])        # str
+            l["Предмет"] = norm_str(l["Предмет"])
+            l["Учитель"] = norm_teachers(l["Учитель"]) # list[str]
+
+        # classes
+        for c in classes:
+            c["name"] = norm_str(c["name"])
+
+        # rooms
+        for r in rooms:
+            r["name"] = norm_str(r["name"])
+            r["building"] = norm_str(r["building"])
+            r["size"] = norm_str(r.get("size", ""))
+            r["prio"] = norm_str(r.get("prio", "Нет прио"))
+
+        # ==================== ordered_schedule[class][day][period] ====================
+        ordered_schedule = {}
+        for c in classes:
+            cname = c["name"]
+            ordered_schedule[cname] = {}
+            for d in days:
+                ordered_schedule[cname][d] = {}
+                for p in range(1, periods_per_day + 1):
+                    ordered_schedule[cname][d][p] = 0
+
+        for l in schedule:
+            cname = l["Класс"]
+            day = l["День"]
+            p = int(l["Урок"])
+            ordered_schedule[cname][day][p] = [l["Учитель"], str(l["Корпус"]), l["Предмет"]]
+
+        # ==================== busy_classes[day][period_str] = [(room_name, building), ...] ====================
+        busy_classes = {d: {str(p): [] for p in range(1, periods_per_day + 1)} for d in days}
+
+        # ==================== ВСПОМОГАТЕЛЬНОЕ: получить dict кабинета (или создать заглушку) ====================
+        def get_room_dict(room_name: str, building: str):
+            room_name = norm_str(room_name)
+            building = norm_str(building)
+            rr = next((r for r in rooms if r["name"] == room_name and r["building"] == building), None)
+            if rr is not None:
+                return rr
+            # если кабинет не найден в rooms — создаём заглушку, чтобы код не падал
+            rr = {"name": room_name, "building": building, "size": "Маленький", "prio": "Инфа"}
+            rooms.append(rr)
+            return rr
+
+        def reserve_rooms(day: str, period: int, chosen_rooms: list):
+            """chosen_rooms = list[dict], бронируем в busy_classes"""
+            for r in chosen_rooms:
+                busy_classes[day][str(period)].append((r["name"], r["building"]))
+
+        # ==================== ПРЕДПРОГОНКА: СНАЧАЛА СТАВИМ ИНФОРМАТИКЕ НУЖНЫЕ КАБИНЕТЫ ====================
+        # Это делается ДО общего подбора, и сразу бронирует кабинеты.
+        for c in classes:
+            cname = c["name"]
+            for d in days:
+                p = 1
+                while p <= periods_per_day:
+                    entry = ordered_schedule[cname][d][p]
+                    if entry == 0:
+                        p += 1
                         continue
+                    
+                    subject = entry[2]
+                    building = entry[1]
+                    teachers_list = entry[0]
 
-                    for r in rooms_list:
-                        if len(list_rooms_out_put) == 2:
-                            break
-                        if r not in current_occupied[(day, slot)]:
-                            list_rooms_out_put.append(r)
-                            current_occupied[(day, slot)].append(r)
-                    if len(list_rooms_out_put) == 2:
-                        break
+                    # ТОЛЬКО информатика
+                    if "Инфа" not in subject:
+                        p += 1
+                        continue
+                    
+                    need = 1 if len(teachers_list) <= 1 else 2
+                    fixed_names = INF_FIXED_BY_BUILDING.get(building, [])
+                    fixed_names = fixed_names[:need]
 
-                output_schedule[(day, slot, class_id)] = (
-                    subject_output, 
-                    teacher_ids, 
-                    tuple(list_rooms_out_put),  # т.к. две комнаты
-                    building
-                )
+                    # если в маппинге нет нужного количества кабинетов — просто пропускаем (пусть общий подбор решит)
+                    if len(fixed_names) != need:
+                        p += 1
+                        continue
+                    
+                    chosen = [get_room_dict(rn, building) for rn in fixed_names]
+
+                    # если это пара (на следующий урок тоже Инфа в том же корпусе) — бронируем сразу на два урока
+                    is_pair = False
+                    if p < periods_per_day:
+                        nxt = ordered_schedule[cname][d][p + 1]
+                        if nxt != 0 and ("Инфа" in nxt[2]) and (nxt[1] == building):
+                            need2 = 1 if len(nxt[0]) <= 1 else 2
+                            # важно: чтобы на обоих уроках одинаково 1/2 кабинета
+                            if need2 == need:
+                                is_pair = True
+
+                    # проверим занятость (если уже занято — не ставим жёстко, пусть дальше best-effort попробует)
+                    def free_for(period_check: int):
+                        return all((r["name"], r["building"]) not in busy_classes[d][str(period_check)] for r in chosen)
+
+                    if is_pair:
+                        if free_for(p) and free_for(p + 1):
+                            # записываем выбранные кабинеты в ОБА урока и бронируем
+                            if len(ordered_schedule[cname][d][p]) < 4:
+                                ordered_schedule[cname][d][p].append(chosen)
+                            else:
+                                ordered_schedule[cname][d][p][3] = chosen
+
+                            if len(ordered_schedule[cname][d][p + 1]) < 4:
+                                ordered_schedule[cname][d][p + 1].append(chosen)
+                            else:
+                                ordered_schedule[cname][d][p + 1][3] = chosen
+
+                            reserve_rooms(d, p, chosen)
+                            reserve_rooms(d, p + 1, chosen)
+                            p += 2
+                            continue
+                        # если на пару не свободно — попробуем хотя бы на текущий
+                        if free_for(p):
+                            if len(ordered_schedule[cname][d][p]) < 4:
+                                ordered_schedule[cname][d][p].append(chosen)
+                            else:
+                                ordered_schedule[cname][d][p][3] = chosen
+                            reserve_rooms(d, p, chosen)
+                        p += 1
+                        continue
+                    else:
+                        if free_for(p):
+                            if len(ordered_schedule[cname][d][p]) < 4:
+                                ordered_schedule[cname][d][p].append(chosen)
+                            else:
+                                ordered_schedule[cname][d][p][3] = chosen
+                            reserve_rooms(d, p, chosen)
+                        p += 1
+                        continue
+                    
+                    
+        # ==================== ВЫБОР КАБИНЕТОВ: строгий -> слабее -> ещё слабее ====================
+        def pick_rooms_core(ordered_schedule, rooms, busy_classes, k, keys, check_periods,
+                            allow_other_buildings=False, ignore_subject_prio=False, allow_ot=False):
+            """
+            Возвращает список из k кабинетов (list[dict]) или [] если не найдено.
+            """
+            cname, day, p = keys
+            entry = ordered_schedule[cname][day][p]
+            teach = entry[0]          # list[str]
+            building = entry[1]       # str
+            subject = entry[2]        # str
+
+            def is_free(room_name, bld):
+                for pp in check_periods:
+                    if (room_name, bld) in busy_classes[day][str(pp)]:
+                        return False
+                return True
+
+            # --- ПРАВИЛО РАЗМЕРА ---
+            # урок для всего класса -> только "Большой"
+            # урок для групп -> можно "Маленький"
+            is_group_lesson = (len(teach) > 1)
+            sizes = ("Маленький", "Большой") if is_group_lesson else ("Большой",)
+
+            # предметный приоритет (англ/инфа)
+            if "Инфа" in subject:
+                subj_prio = None if ignore_subject_prio else "Инфа"
+            elif "Англ" in subject:
+                subj_prio = None if ignore_subject_prio else "Англ"
             else:
-                # needed_rooms == 2 и (end_1_2 or end_2_2) уже нашли 2 аудитории
-                output_schedule[(day, slot, class_id)] = (
-                    subject_output, 
-                    teacher_ids, 
-                    tuple(list_rooms_out_put), 
-                    building
-                )
+                subj_prio = None
 
-        return output_schedule 
+            def ok_room(r):
+                if not allow_other_buildings and r["building"] != building:
+                    return False
+                if not allow_ot and r["name"] in ("ОТ_1", "ОТ_2"):
+                    return False
+                if r.get("prio") == "Физра":
+                    return False
+                if not is_free(r["name"], r["building"]):
+                    return False
+                return True
+
+            def subject_ok(r):
+                if subj_prio is None:
+                    return True
+                return subj_prio in r["prio"].split("/")
+
+            # ---------- 1) teacher prio ----------
+            prio_lists = []
+            for tname in teach:
+                pref = []
+                for t_g in teachers:
+                    if norm_str(t_g.get("name")) == tname:
+                        pmap = t_g.get("prio", {})
+                        pval = pmap.get(building)
+                        if isinstance(pval, str) and pval.strip():
+                            pref = [pval.strip()]
+                        elif isinstance(pval, list):
+                            pref = [norm_str(x) for x in pval if norm_str(x)]
+                        break
+                prio_lists.append(pref)
+
+            chosen_names = []
+            for pref in prio_lists:
+                found = None
+                for rname in pref:
+                    if rname not in chosen_names and is_free(rname, building):
+                        found = rname
+                        break
+                if found:
+                    chosen_names.append(found)
+
+            if len(chosen_names) >= k:
+                out = []
+                for rname in chosen_names[:k]:
+                    rr = next((r for r in rooms if r["name"] == rname and r["building"] == building), None)
+                    if rr is None:
+                        out = []
+                        break
+                    out.append(rr)
+                if len(out) == k:
+                    return out
+
+            # ---------- 2) подбор по size + прио предмета ----------
+            cands = []
+            for sz in sizes:
+                cands += [r for r in rooms if ok_room(r) and r["size"] == sz and subject_ok(r)]
+            if len(cands) >= k:
+                return random.sample(cands, k)
+
+            # ---------- 3) подбор по size без прио предмета ----------
+            cands = []
+            for sz in sizes:
+                cands += [r for r in rooms if ok_room(r) and r["size"] == sz]
+            if len(cands) >= k:
+                return random.sample(cands, k)
+
+            # ---------- 4) финальный fallback: любые свободные, НО size НЕ отпускаем ----------
+            cands = [r for r in rooms if ok_room(r) and r["size"] in sizes]
+            if len(cands) >= k:
+                return random.sample(cands, k)
+
+            return []
 
 
-# ВЫВОД EXEL
-#output_schedule: dict[(day- позиционка, slot- позиционка, class_id- преобраз)] = (subject- +, teacher_id- преобраз, room- +, building- условие)
+        def pick_rooms_best_effort(ordered_schedule, rooms, busy_classes, k, keys, check_periods):
+            chosen = pick_rooms_core(ordered_schedule, rooms, busy_classes, k, keys, check_periods,
+                                     allow_other_buildings=False, ignore_subject_prio=False, allow_ot=False)
+            if chosen:
+                return chosen
 
-    def getting_exel(self, schedule):
+            chosen = pick_rooms_core(ordered_schedule, rooms, busy_classes, k, keys, check_periods,
+                                     allow_other_buildings=False, ignore_subject_prio=True, allow_ot=False)
+            if chosen:
+                return chosen
+
+            chosen = pick_rooms_core(ordered_schedule, rooms, busy_classes, k, keys, check_periods,
+                                     allow_other_buildings=True, ignore_subject_prio=True, allow_ot=False)
+            if chosen:
+                return chosen
+
+            return pick_rooms_core(ordered_schedule, rooms, busy_classes, k, keys, check_periods,
+                                   allow_other_buildings=True, ignore_subject_prio=True, allow_ot=True)
+
+
+        # ==================== СБОР final_timetable (пары бронируем на 2 урока сразу) ====================
+        final_timetable = []
+
+        for c in classes:
+            cname = c["name"]
+            for d in days:
+                for p in range(1, periods_per_day + 1):
+                    entry = ordered_schedule[cname][d][p]
+                    if entry == 0:
+                        continue
+                    
+                    teachers_list = entry[0]
+                    building = entry[1]
+                    subject = entry[2]
+
+                    # физра
+                    if subject == "Физра":
+                        room_field = "УОО" if building == "1" else "СЗ"
+                        final_timetable.append({
+                            "День": d, "Урок": p, "Класс": cname,
+                            "Учитель": ", ".join(teachers_list),
+                            "Корпус": building, "Предмет": subject, "Кабинет": room_field
+                        })
+                        continue
+                    
+                    need = 1 if len(teachers_list) <= 1 else 2
+
+                    # уже назначено ранее (например второй урок пары или пред-прогонка информатики)
+                    if len(entry) >= 4 and entry[3]:
+                        chosen = entry[3]
+                        room_field = chosen[0]["name"] if need == 1 else f"{chosen[0]['name']}, {chosen[1]['name']}"
+                        final_timetable.append({
+                            "День": d, "Урок": p, "Класс": cname,
+                            "Учитель": ", ".join(teachers_list),
+                            "Корпус": building, "Предмет": subject, "Кабинет": room_field
+                        })
+                        continue
+                    
+                    # пара: p и p+1 одинаковый предмет и корпус
+                    is_pair = False
+                    if p < periods_per_day:
+                        nxt = ordered_schedule[cname][d][p + 1]
+                        if nxt != 0 and nxt[2] == subject and nxt[1] == building:
+                            need2 = 1 if len(nxt[0]) <= 1 else 2
+                            if need2 == need and (len(nxt) < 4 or not nxt[3]):
+                                is_pair = True
+
+                    if is_pair:
+                        chosen = pick_rooms_best_effort(ordered_schedule, rooms, busy_classes, need, (cname, d, p), [p, p + 1])
+
+                        if chosen:
+                            for pp in (p, p + 1):
+                                for r in chosen:
+                                    busy_classes[d][str(pp)].append((r["name"], r["building"]))
+                                if len(ordered_schedule[cname][d][pp]) < 4:
+                                    ordered_schedule[cname][d][pp].append(chosen)
+                                else:
+                                    ordered_schedule[cname][d][pp][3] = chosen
+
+                            room_field = chosen[0]["name"] if need == 1 else f"{chosen[0]['name']}, {chosen[1]['name']}"
+                        else:
+                            # если на пару не получилось — ставим хотя бы на текущий
+                            chosen1 = pick_rooms_best_effort(ordered_schedule, rooms, busy_classes, need, (cname, d, p), [p])
+                            if chosen1:
+                                for r in chosen1:
+                                    busy_classes[d][str(p)].append((r["name"], r["building"]))
+                                if len(ordered_schedule[cname][d][p]) < 4:
+                                    ordered_schedule[cname][d][p].append(chosen1)
+                                else:
+                                    ordered_schedule[cname][d][p][3] = chosen1
+                                room_field = chosen1[0]["name"] if need == 1 else f"{chosen1[0]['name']}, {chosen1[1]['name']}"
+                            else:
+                                room_field = "НЕТ КАБ"
+                    else:
+                        chosen = pick_rooms_best_effort(ordered_schedule, rooms, busy_classes, need, (cname, d, p), [p])
+                        if chosen:
+                            for r in chosen:
+                                busy_classes[d][str(p)].append((r["name"], r["building"]))
+                            if len(ordered_schedule[cname][d][p]) < 4:
+                                ordered_schedule[cname][d][p].append(chosen)
+                            else:
+                                ordered_schedule[cname][d][p][3] = chosen
+                            room_field = chosen[0]["name"] if need == 1 else f"{chosen[0]['name']}, {chosen[1]['name']}"
+                        else:
+                            room_field = "НЕТ КАБ"
+
+                    final_timetable.append({
+                        "День": d, "Урок": p, "Класс": cname,
+                        "Учитель": ", ".join(teachers_list),
+                        "Корпус": building, "Предмет": subject, "Кабинет": room_field
+                    })
+
+
+
+        count = 0
+        for a in final_timetable:
+            # print(a)
+            count += 1
+
+        print(f"Кол-во уроков после добваления кабинетов: {count}")
+
+        print("-"*70)
+
+
+        count = 0
+        for c in classes:
+            count_c = 0
+            for s in c["subjects"]:
+                count_c += s['hours']
+            count += count_c
+            print(f"{c['name']}: {count_c} часов")
+
+        print("-"*70)
+
+        print(f"Нормативно должно быть: {count}")
+
+
+        # # --------------------------------------------
+        # # 7. Вывод расписания в excel 
+        # # --------------------------------------------
+
         wb = Workbook()
+        list_of_classes = []
+
+        for items in final_timetable:
+            if items["Класс"] in list_of_classes:
+                continue
+            else:
+                list_of_classes.append(items["Класс"])
+
+
+        t_to_color = {}
+
+        for t in teachers:
+            t_to_color[t['name']] = t['color']
+
+
+
+        # s_list_of_classes = sorted(list_of_classes)
+        weight_letters_ = {
+            "8А": 1,
+            "8Б": 2,
+            "8В": 3,
+            "8Г": 4,
+            "8Д": 5,
+
+            "9А": 6,
+            "9Б": 7,
+            "9В": 8,
+            "9Г": 9,
+            "9Д": 10,
+
+            "10А": 11,
+            "10Б": 12,
+            "10В": 13,
+            "10Г": 14,
+            "10Д": 15,
+
+            "11А": 16,
+            "11Б": 17,
+            "11В": 18,
+            "11Г": 19,
+            "11Д": 20,
+
+        }
+
+        n = 1
+        while n < len(list_of_classes):
+            for i in range(len(list_of_classes)-n):
+                if weight_letters_[list_of_classes[i]] > weight_letters_[list_of_classes[i + 1]]:
+                    list_of_classes[i],  list_of_classes[i + 1] = list_of_classes[i + 1], list_of_classes[i]
+            n += 1
+
+        s_list_of_classes = list_of_classes
+
+        # print(s_list_of_classes)
+
         ws = wb.active
 
-        # 1) Вспомогалки
-        # Для быстрого нахождения номер + буква
-        id_to_LettNum = {}
-        list_all_classes = []
-        self.con.execute("""SELECT * FROM parallels""")
-        list_parallels = self.con.fetchall()
-        for parallel in list_parallels:
-            id_to_LettNum[str(parallel[0])] = (f"{parallel[2]}{parallel[1]}")
-            list_all_classes.append((int(parallel[2]), parallel[1], parallel[0]))
-        properly_sorted_all_classes = sorted(list_all_classes, key = lambda x: (x[2], x[1]))
 
-        # Для быстрого нахождения ФИО учителя
-        id_to_SNO = {}
-        self.con.execute("""SELECT * FROM teachers""")
-        list_teachers = self.con.fetchall()
-        for teacher in list_teachers:
-            id_to_SNO[str(teacher[0])] = f"{teacher[1]} {teacher[2][0]}. {teacher[3][0]}."
+        help_class = {} 
+        for i in range(0, len(list_of_classes)): 
+            help_class[list_of_classes[i]] = i
 
-        #Каркас для вывода
-        day_id_to_word = ("Понедельник", "Вторник", "Среда", "Четверг", "Пятница", "Суббота")
+        #Дни недели 
+        vertical_text = Alignment(text_rotation=90, horizontal='center',  
+                                  vertical='center') 
 
-        for start_column in range(0, len(properly_sorted_all_classes)):
-            if start_column == 0:
-                real_start_column = 1
+        help_days_fully = { 
+            "Пн": ("Понедельник",  
+                   PatternFill(start_color='F0E68C', fill_type='solid') ,  
+                    Font(color='000000', size=13, bold = True), 1), 
+            "Вт": ("Вторник",  
+                   PatternFill(start_color='6A5ACD', fill_type='solid') ,  
+                    Font(color='000000', size=13, bold = True), 2), 
+            "Ср": ("Среда",  
+                   PatternFill(start_color='1E90FF', fill_type='solid') ,  
+                    Font(color='000000', size=13, bold = True), 3), 
+            "Чт": ("Четверг",  
+                   PatternFill(start_color='FF69B4', fill_type='solid') ,  
+                    Font(color='000000', size=13, bold = True), 4), 
+            "Пт": ("Пятница",  
+                   PatternFill(start_color='EE82EE', fill_type='solid') ,  
+                    Font(color='000000', size=13, bold = True), 5), 
+            "Сб": ("Суббота",  
+                   PatternFill(start_color='2E8B57', fill_type='solid') ,  
+                    Font(color='000000', size=13, bold = True), 6), 
+        } 
+
+        for idx, (day, fill, text, n) in enumerate(help_days_fully.values(), start=1): 
+            # Получаем букву колонки 
+            column_1 = get_column_letter(1)  
+            row = (idx - 1) * 9 + (idx - 1) * 2 + 3 
+
+            # Записываем день недели 
+            cell = ws[f"{column_1}{row}"] 
+            cell.value = day 
+
+            cell.fill = fill  # Фон 
+            cell.font = text 
+            # Применяем вертикальную ориентацию 
+            cell.alignment = vertical_text 
+
+            # Увеличиваем ширину колонки 
+            ws.column_dimensions[column_1].width = 5 
+
+            # Объединяем ячейки по вертикали если нужно 
+            ws.merge_cells(f"{column_1}{row}:{column_1}{row + 8}") 
+        ### 
+
+        #Вспомогалочка 
+        period_to_time = { 
+            "1": "8:35-  9:20", 
+            "2": "9:30-10:15", 
+            "3": "10:25-11:10", 
+            "4": "11:30-12:15", 
+            "5": "12:35-13:20", 
+            "6": "13:40-14:25", 
+            "7": "14:35-15:20", 
+            "8": "15:30-16:15", 
+            "9": "16:25-17:10" 
+        } 
+        # 
+
+        #Cкелетик 
+
+        thin_border = Border( 
+            left=Side(style='thin', color='808080'), 
+            right=Side(style='thin', color='808080'), 
+            top=Side(style='thin', color='808080'), 
+            bottom=Side(style='thin', color='808080') 
+        ) 
+        ### 
+
+        separator_fill = PatternFill(start_color='D3D3D3',  # Светло-серый цвет 
+                                       end_color='D3D3D3', 
+                                       fill_type='solid') 
+        ### 
+
+        time_alignment = Alignment( 
+            horizontal='center',     # Выравнивание по горизонтали 
+            vertical='center',       # Выравнивание по вертикали 
+            wrap_text=True,         # Перенос текста 
+            shrink_to_fit=True,     # Уменьшение текста для вмещения 
+        ) 
+        time_text = Font(color='000000',  
+                         size=11, bold = False) 
+        ### 
+
+        for c in help_class: 
+            num = help_class[c] 
+            #Название класса 
+            column_3 = get_column_letter(5 + 8 * num)  
+            row = 1  # Явно указываем строку 
+            cell = ws[f"{column_3}{row}"] 
+            cell.value = c 
+            cell.font = Font(color='000000', size=15, bold=True) 
+            cell.alignment = Alignment(horizontal='center', vertical='center') 
+            # Объединение ячеек после установки значения 
+            ws.merge_cells(f"{column_3}{row}:{get_column_letter(9 + 8 * num)}{row}") 
+            # 
+
+            #Перегородочки 
+
+            ws.column_dimensions[f'{get_column_letter(2 + num * 8)}'].width = 1.7 
+            ws.column_dimensions[f'{get_column_letter(4 + num * 8)}'].width = 1.7 
+            column_2 = get_column_letter(3 + num * 8)
+
+            for row in range(1, 67): 
+                cell = ws[f"{column_2}{row}"] 
+                cell.fill = separator_fill 
+            # Устанавливаем высоту строки перегородки 
+            ws.column_dimensions[column_2].width = 0.4 
+            ### 
+
+            #Время 
+            for idx, (day, fill, text, n) in enumerate(help_days_fully.values(), start=1): 
+                for i in range(0, 9): 
+                    column = get_column_letter(5 + num * 8)
+
+                    cell = ws[f'{column}{2 * (idx - 1) + (idx - 1) * 9 + i + 3}'] 
+                    cell.value = period_to_time[str(i + 1)] 
+                    cell.alignment = time_alignment 
+                    cell.border = thin_border 
+                    cell.font = time_text 
+            ### 
+
+            #Уроки
+            for idx, (day, fill, text, n) in enumerate(help_days_fully.values(), start=1): 
+                for i in range(0, 9): 
+                    column = get_column_letter(6 + num * 8)
+                    row = 2 * (idx - 1) + (idx - 1) * 9 + i + 3 
+
+                    # Сначала записываем значение 
+                    cell = ws[f'{column}{row}'] 
+                    cell.value = i+1 
+                    cell.alignment = time_alignment 
+                    cell.border = thin_border 
+                    cell.font = time_text 
+                    ws.column_dimensions[column].width = 1.8 
+            ### 
+
+            #Корпуса 
+            n_to_b = { 
+                "1": "Лицей",  
+                "2": "Графский" 
+            } 
+
+            for _ in classes: 
+                if _['name'] == c: 
+                    for d in _['buildings']: 
+                        column_4 = get_column_letter(4 + 8 * num) 
+                        row_4 = 2 + 11 * (help_days_fully[d][3] - 1) 
+                        cell = ws[f'{column_4}{row_4}'] 
+                        cell.value = n_to_b[_['buildings'][d]] 
+
+                        cell.alignment = Alignment( 
+                            horizontal='center',     # Выравнивание по горизонтали 
+                            vertical='center',       # Выравнивание по вертикали 
+                        ) 
+
+                        cell.font = Font(color='000000',  
+                            size=13, bold = False, italic=True 
+                        ) 
+
+                        ws.merge_cells(f"{column_4}{row_4}:{get_column_letter(9 + 8 * num)}{row_4}")    
+            ### 
+
+            #Обязательный РОВ
+
+            #Предмет
+            row = 4 
+            column = get_column_letter(7 + help_class[c] * 8)
+            ws.column_dimensions[column].width = 15 
+            cell = ws[f'{column}{row}'] 
+            cell.value = "РОВ"
+            cell.alignment = Alignment( 
+                            horizontal='center',     # Выравнивание по горизонтали 
+                            vertical='center', 
+                            wrap_text=False,        # Отключаем перенос текста 
+                            shrink_to_fit=False       # Выравнивание по вертикали 
+                        ) 
+            cell.border = thin_border 
+            cell.font = Font(color='FFFFFF', size=11, bold = False)  
+            cell.fill = PatternFill(start_color='b00149', fill_type='solid') 
+            ### 
+
+            #Учитель 
+            row = 4
+            column = get_column_letter(9 + help_class[c] * 8) 
+            ws.column_dimensions[column].width = 15 
+            cell = ws[f'{column}{row}'] 
+            cell.value = "--"
+            cell.alignment = Alignment( 
+                            horizontal='center',     # Выравнивание по горизонтали 
+                            vertical='center', 
+                            wrap_text=True,        # Отключаем перенос текста 
+                            shrink_to_fit=False       # Выравнивание по вертикали 
+                        ) 
+            cell.border = thin_border 
+            cell.font = Font(color='FFFFFF', size=11, bold = False)  
+            cell.fill = PatternFill(start_color='b00149', fill_type='solid') 
+            # 
+
+            #Кабинеты 
+            row = 4
+            column = get_column_letter(8 + help_class[c] * 8)
+            ws.column_dimensions[column].width = 15 
+            cell = ws[f'{column}{row}'] 
+            cell.value = "ККЗ"
+            cell.alignment = Alignment( 
+                            horizontal='center',     # Выравнивание по горизонтали 
+                            vertical='center', 
+                            wrap_text=False,        # Отключаем перенос текста 
+                            shrink_to_fit=False        # Выравнивание по вертикали 
+                        ) 
+            cell.border = thin_border 
+            cell.font = Font(color='FFFFFF', size=11, bold = False)  
+            cell.fill = PatternFill(start_color='b00149', fill_type='solid') 
+            #
+
+
+        for prec_p in final_timetable: 
+        
+            d = prec_p['День'] 
+            p = prec_p['Урок'] 
+            c = prec_p['Класс'] 
+            t = prec_p['Учитель'] 
+            s = prec_p['Предмет'] 
+            r = prec_p['Кабинет'] 
+
+            fill = PatternFill(start_color= t_to_color[t.split(",")[0]], fill_type='solid') 
+            #Предмет 
+            row = 3 + (help_days_fully[d][3] - 1) * 11 + (p - 1) 
+            column = get_column_letter(7 + help_class[c] * 8)
+            ws.column_dimensions[column].width = 15 
+            cell = ws[f'{column}{row}'] 
+            cell.value = s 
+            cell.alignment = Alignment( 
+                            horizontal='center',     # Выравнивание по горизонтали 
+                            vertical='center', 
+                            wrap_text=False,        # Отключаем перенос текста 
+                            shrink_to_fit=False       # Выравнивание по вертикали 
+                        ) 
+            cell.border = thin_border 
+            cell.font = time_text 
+            cell.fill = fill
+            ### 
+
+            #Учитель 
+            row = 3 + (help_days_fully[d][3] - 1) * 11 + (p - 1) 
+            column = get_column_letter(9 + help_class[c] * 8) 
+            ws.column_dimensions[column].width = 15 
+            cell = ws[f'{column}{row}'] 
+            cell.value = t.replace(",", ",\n") 
+            cell.alignment = Alignment( 
+                            horizontal='center',     # Выравнивание по горизонтали 
+                            vertical='center', 
+                            wrap_text=True,        # Отключаем перенос текста 
+                            shrink_to_fit=False       # Выравнивание по вертикали 
+                        ) 
+            cell.border = thin_border 
+            cell.font = time_text 
+            cell.fill = fill
+            # 
+
+            #Кабинеты 
+            row = 3 + (help_days_fully[d][3] - 1) * 11 + (p - 1) 
+            column = get_column_letter(8 + help_class[c] * 8)
+            ws.column_dimensions[column].width = 15 
+            cell = ws[f'{column}{row}'] 
+            cell.value = r 
+            cell.alignment = Alignment( 
+                            horizontal='center',     # Выравнивание по горизонтали 
+                    vertical='center', 
+                    wrap_text=False,        # Отключаем перенос текста 
+                    shrink_to_fit=False        # Выравнивание по вертикали 
+                ) 
+            cell.border = thin_border 
+            cell.font = time_text 
+
+        # Создаём папку output если её нет
+        output_path = os.path.join(os.getcwd(), "Выходные данные")
+        os.makedirs(output_path, exist_ok=True)
+        
+        wb.save(os.path.join(output_path, "Итоговое_расписание.xlsx"))
+        # --------------------------------------------
+        # 8. Вывод окон и переходов в txt
+        # --------------------------------------------
+        file_name = os.path.join(output_path, "Переходы_и_окна_учителей.txt")
+        with open(file_name, "w", encoding="UTF-8") as file:
+            file.write("**Переходы и окна учитеей по физре см в таблице!! \n")
+            file.write("\n")
+            file.write("Переходы между корпусами у учителей:\n")
+            if txt_output_trans:
+                for item in txt_output_trans:
+                
+                    file.write(f"{item[0]}: {item[1]} - {item[2]} по {item[3]}\n")
             else:
-                real_start_column = start_column*6
+                file.write("Отсутств...\n")
 
-            for day_of_week_id in range(0, 6):
-                if day_of_week_id == 0:
-                    start_row = 1
-                else:
-                    start_row = (day_of_week_id * 11) + 1
+            file.write("\n")
 
-                for slot_of_day in range(0, 9):
-                    if slot_of_day == 0:
-                        ws.cell(row= start_row + slot_of_day, column= real_start_column, value= day_id_to_word[day_of_week_id])
-                        ws.cell(row= start_row + slot_of_day, column= real_start_column + 2, value= "Кабинет") 
-                        ws.cell(row= start_row + slot_of_day, column= real_start_column + 3, value= "Учитель")
-                    else:
-                        ws.cell(row= start_row + slot_of_day, column= real_start_column, value= slot_of_day)
-
-    #output_schedule: dict[(day- позиционка, slot- позиционка, class_id- преобраз)] = (subject- +, teacher_id- преобраз, room- +, building- условие)
-
-    #ИСПРАВИТТЬ
-        for (day, slot, class_id), (subject, teacher_id, room, building) in schedule.items():
-            if day == 1:
-                start_row = 1 + slot
-                head_row = 1
-            else:
-                start_row = ((day - 1) * 11) + 1 + slot
-                head_row = (day - 1) * 11 + 1
-
-            if type(room) == type(tuple()):
-                room = f"{room[0]}, {room[1]}"
-
-            if len(teacher_id) > 1:
-                teachers_out = f"{id_to_SNO[teacher_id[0]]}, {id_to_SNO[teacher_id[1]]}"
-            else:
-                teachers_out = f"{id_to_SNO[teacher_id[0]]}"
-
-            count = None
-            for i in range(0, len(properly_sorted_all_classes)):
-                if str(properly_sorted_all_classes[i][2]) == str(class_id):
-                    count = i
-
-            if count == 0:
-                start_column = 2
-            else:
-                start_column = (count * 6) + 1
-
-            if building == 1:
-                output_building = "Лицей"
-            else:
-                output_building = "Графский"
-
-            ws.cell(row= head_row, column= start_column, value= f"{output_building}, {id_to_LettNum[class_id]}") 
-            ws.cell(row= start_row, column= start_column, value= subject)
-            ws.cell(row= start_row, column= start_column + 1, value= room) 
-            ws.cell(row= start_row, column= start_column + 2, value= teachers_out)
-
-        wb.save("Расписание.xlsx")
-
-
-    def mega_end(self): 
-        end_schedule = self.getting_lessons_and_rooms()
-        if end_schedule:
-            self.getting_exel(end_schedule)
-            self.root.destroy()
-            popup(self.self_parent_menu.root_menu_1, f"Расписание создано в папке!", "Успех").root.mainloop()
+            file.write("Окна у учителей:\n")
+            if txt_output_windows:
             
-            
-        else:
-            self.root.destroy()
-            warning = eror_popup(self.self_parent_menu.root_menu_1, "Расписание не создано")
-            warning.root.mainloop()
+                for item in txt_output_windows:       
+                    file.write(f"{item[0]}: {item[1]} - {item[2]} по {item[3]}\n")
+            else:
+                file.write("Отсутств...\n")
 
+        # Показываем popup успеха в главном потоке
+        self.root.after(0, lambda: self._show_success_popup())
 
-    ###
+        ###
 
-
-
-
-
-
+        #Алгоритм
+        #
 
 #<Созд пара> - 2 
 class menu_add_parallel:
@@ -1504,11 +2290,15 @@ class menu_add_parallel:
         self.base_menu_2 = base
         self.con_menu_2 = connect
         self.root_menu_2 = Toplevel(parent)
-        self.root_menu_2.title("Добавление параллели")
+        self.root_menu_2.title("Добавление класса")
         self.root_menu_2.geometry(f"{int(self.root_menu_2.winfo_screenwidth() * 0.56)}x{int(self.root_menu_2.winfo_screenheight()*0.6)}")
         self.root_menu_2.resizable(width=False, height=False)
         self.full_data_class = []
         self.clas_buttons = []
+
+        self.data_PE= []
+        self.extra_les = []                     # хранит список внеурочек (только ФИО учителя)
+        ###
     ###
 
         style_2 = ttk.Style()
@@ -1531,6 +2321,9 @@ class menu_add_parallel:
 
         self.root_menu_2.configure(bg="#e0dcd4")
 
+        self.PE_les = []
+        self.extra_les = []
+
 
     #Виджеты - создания параллели +++
     #Границы 
@@ -1551,6 +2344,17 @@ class menu_add_parallel:
             bd=1               
         )
         separator_1.place(relx=0.29, rely=0.14, relwidth= 0.004, relheight= 1) #Вертикальная
+
+        separator_1 = Frame(
+            self.root_menu_2, 
+            height=3,          
+            bg='grey',        
+            relief=FLAT,
+            bd=1               
+        )
+        separator_1.place(relx=0.73, rely=0, relwidth= 0.004, relheight= 0.14) #Вертикальная
+
+
     ###
 
     #Блок выбора номера
@@ -1567,11 +2371,11 @@ class menu_add_parallel:
             self.root_menu_2,
             values=self.options_1,
             style="TCombobox",
-            font=("Helvetica", 27),
+            font=("Helvetica", 29),
             state="readonly", 
             foreground="#4D4D4D"
         )
-        self.number.place(relx=0.3, rely=0, relwidth=0.10, relheight=0.14)
+        self.number.place(relx=0.3, rely=0, relwidth=0.08, relheight=0.14)
     ###
 
     #Блок выбора буквы
@@ -1580,18 +2384,29 @@ class menu_add_parallel:
             text = "Буква:",
             style = "TLabel"
             )
-        self.creating_letter.place(relx=0.5, rely=0, relwidth=0.20, relheight=0.14)
+        self.creating_letter.place(relx=0.45, rely=0, relwidth=0.20, relheight=0.14)
 
         options_2 = ["А", "Б", "В", "Г", "Д"]
         self.letter = ttk.Combobox(
             self.root_menu_2,
             values=options_2,
             style="TCombobox",
-            font=("Helvetica", 27),
+            font=("Helvetica", 29),
             state="readonly", 
             foreground="#4D4D4D"
         )
-        self.letter.place(relx=0.7, rely=0, relwidth=0.10, relheight=0.14)
+        self.letter.place(relx=0.65, rely=0, relwidth=0.08, relheight=0.14)
+    ###
+
+    #Блок выбора доп инфы 
+        self.add_infa = ttk.Button(
+            self.root_menu_2,
+            text="Доп инфа",
+            style = "Main_2.TButton",
+            command= self.open_dop_infa
+        )
+        self.add_infa.place(relx=0.734, rely=0, relwidth=0.266, relheight=0.14)
+
     ###
 
     #Блок выбора урока
@@ -1680,13 +2495,13 @@ class menu_add_parallel:
 
     #Футер
     #Кнопка добавления урока 
-        self.add_class = ttk.Button(
+        self.add_clas = ttk.Button(
             self.root_menu_2,
             text="Добавить",
             style = "Main_2.TButton",
             command = self.add_class
         )
-        self.add_class.place(relx=0, rely=0.75, relwidth=0.29, relheight=0.1)
+        self.add_clas.place(relx=0, rely=0.75, relwidth=0.29, relheight=0.1)
     ###
 
     #Кнопка добавления параллели
@@ -1751,8 +2566,6 @@ class menu_add_parallel:
         parallel_id = self.con_menu_2.fetchone()[0]
         ###
 
-        
-
         # Добавляем уроки в таблицу lessons с id учителя
         for subject_data in self.full_data_class:
             if subject_data:  # Проверяем, что данные не пустые
@@ -1775,7 +2588,24 @@ class menu_add_parallel:
                     "INSERT INTO lessons (Id_parallel, Subject, Hours, Id_teacher) VALUES (?, ?, ?, ?)",
                     (parallel_id, subject_data[0], subject_data[2], teacher_id)
                 )
+        self.base_menu_2.commit() 
+
+        for data in self.data_PE:
+            if data:
+                self.con_menu_2.execute(
+                        "INSERT INTO pe (Id_parallel, Teacher, Day, Lesson) VALUES (?, ?, ?, ?)",
+                        (parallel_id, data[0], data[1], data[2])
+                    )
+                self.base_menu_2.commit()
+        # и внеурочки (только преподаватели)
+        for teacher in self.extra_les:
+            if teacher:
+                self.con_menu_2.execute(
+                        "INSERT INTO extra (Id_parallel, Teacher) VALUES (?, ?)",
+                        (parallel_id, teacher)
+                    )
         self.base_menu_2.commit()
+
 
         # Очищаем форму
         self.letter.set('')
@@ -1786,9 +2616,14 @@ class menu_add_parallel:
         self.subject.set('')
         self.full_data_class.clear()
         self.display_class()
-
+        self.full_data_class = []
+        self.data_PE = []
+        self.extra_les = []
         popup(self.root_menu_2, f"Параллель {num}{letter} создана!", "Успех").root.mainloop()
     ###
+    def open_dop_infa(self):
+        extra_info_class(self, self.root_menu_2, self.con_menu_2, self.base_menu_2)
+
 
 
 
@@ -1874,7 +2709,602 @@ class menu_add_parallel:
         self.display_class()
         warning = popup(self.root_menu_2, "Предмет добавлен", f"{sub}")
 ###
+#<Окно доп инфы> - 
+class extra_info_class:
+    def __init__(self, parent, paren_root, con, base):
+        self.parent = parent
+        self.root_extra_info = Toplevel(paren_root)
+        self.con = con
+        self.base = base
+        self.root_extra_info.title("Доп инфа")
+        self.root_extra_info.geometry(f"{int(self.root_extra_info.winfo_screenwidth() * 0.54)}x{int(self.root_extra_info.winfo_screenheight()*0.58)}")
+        self.root_extra_info.resizable(width=False, height=False)
 
+        self.data_PE_les = list(self.parent.data_PE)
+        self.PE_buttons = []
+        # дополнительный список для внеурочек
+        self.data_extra = list(getattr(self.parent, 'extra_les', []))
+        self.extra_buttons = []
+        
+        # Очищаем невалидные данные (удаленные учителя)
+        self._clean_invalid_teachers()
+
+        style_extra_info_class = ttk.Style()
+
+        style_extra_info_class.theme_use('clam')
+
+        style_extra_info_class.configure("TLabel", font=("Helvetica", 30, "italic"))
+
+        style_extra_info_class.configure("TEntry", fieldbackground="#DCDCDC")
+
+        style_extra_info_class.configure("TCombobox", fieldbackground="#DCDCDC", arrowsize = 0)
+        style_extra_info_class.map("TCombobox", fieldbackground=[("readonly", "#DCDCDC")])
+
+
+        style_extra_info_class.configure("Main_2.TButton", font=("Helvetica", 30, "bold"), background="#696969", foreground="white",)
+        style_extra_info_class.map("Main_2.TButton", background=[("active", "#0000CD")])
+
+        style_extra_info_class.configure("Sec_2.TButton", font=("Helvetica", 13, "bold"), background="#696969", foreground="white",)
+        style_extra_info_class.map("Sec_2.TButton", background=[("active", "#4169E1")])
+
+        self.root_extra_info.configure(bg="#e0dcd4")
+
+    #Граница
+        separator_1 = Frame(
+            self.root_extra_info, 
+            height=3,          
+            bg='grey',        
+            relief=FLAT,
+            bd=1               
+        )
+        separator_1.place(relx=0.498, rely=0, relwidth= 0.004, relheight= 0.86) #Вертикальная
+    ###
+
+    #Блок физкультур
+        self.PE_les = ttk.Label(
+            self.root_extra_info,
+            text = "Физра:",
+            style="TLabel",
+            anchor="center"
+            )
+        self.PE_les.place(relx=0, rely=0, relwidth=0.498, relheight=0.14)
+
+        self.teacher = ttk.Label(
+            self.root_extra_info,
+            text = "Учитель:",
+            style="TLabel",
+            anchor="center",
+            font=("Helvetica", 26),
+            )
+        
+        self.teacher.place(relx=0, rely=0.14, relwidth=0.2, relheight=0.14)
+
+        self.options_teacher = []
+        self.con.execute("""SELECT * FROM teachers""")
+        values = self.con.fetchall() # Проверка на предварительное наличие кабинета 
+
+        for i in values:
+            self.options_teacher.append(f"{i[1]} {i[2][0]}. {i[3][0]}.")
+        
+        self.teacher_in = ttk.Combobox(
+            self.root_extra_info,
+            values=self.options_teacher,
+            style="TCombobox",
+            font=("Helvetica", 25),
+            state="readonly", 
+            foreground="#4D4D4D"
+        )
+        self.teacher_in.place(relx=0.2, rely=0.14, relwidth=0.298, relheight=0.14)
+
+
+        self.day = ttk.Label(
+            self.root_extra_info,
+            text = "День:",
+            style="TLabel",
+            anchor="center",
+            font=("Helvetica", 26),
+            )
+        self.day.place(relx=0, rely=0.28, relwidth=0.1, relheight=0.14)
+
+        self.day_option = ["Понедельник", "Вторник", "Среда", "Четверг", "Пятница", "Суббота"]
+        self.days = ttk.Combobox(
+            self.root_extra_info,
+            values=self.day_option,
+            style="TCombobox",
+            font=("Helvetica", 24),
+            state="readonly", 
+            foreground="#4D4D4D"
+        )
+        self.days.place(relx=0.1, rely=0.28, relwidth=0.2, relheight=0.14)
+
+
+        self.lesson = ttk.Label(
+            self.root_extra_info,
+            text = "Урок:",
+            style="TLabel",
+            anchor="center",
+            font=("Helvetica", 26),
+            )
+        self.lesson.place(relx=0.3, rely=0.28, relwidth=0.1, relheight=0.14)
+
+        self.les = ["1", "2", "3", "4", "5", "6", "7", "8"]
+        self.les_option = ttk.Combobox(
+            self.root_extra_info,
+            values=self.les,
+            style="TCombobox",
+            font=("Helvetica", 24),
+            state="readonly", 
+            foreground="#4D4D4D"
+        )
+        self.les_option.place(relx=0.4, rely=0.28, relwidth=0.098, relheight=0.14)
+
+        #Кнопка добавления урока 
+        self.add_clas = ttk.Button(
+            self.root_extra_info,
+            text="Добавить",
+            style = "Main_2.TButton",
+            command = self.add_PE
+        )
+        self.add_clas.place(relx=0, rely=0.42, relwidth=0.498, relheight=0.1)
+    ###
+
+    ###
+
+    #Блок доп уроков
+        self.extra_les = ttk.Label(
+            self.root_extra_info,
+            text = "Внеурочка:",
+            style="TLabel",
+            anchor="center",
+            )
+        self.extra_les.place(relx=0.52, rely=0, relwidth=0.498, relheight=0.14)
+
+        self.teacher_e = ttk.Label(
+            self.root_extra_info,
+            text = "Учитель:",
+            style="TLabel",
+            anchor="center",
+            font=("Helvetica", 26),
+            )
+        
+        self.teacher_e.place(relx=0.52, rely=0.2, relwidth=0.2, relheight=0.14)
+
+        self.options_teacher = []
+
+        for data in self.parent.full_data_class:
+            if data:  # Проверяем, что элемент не пустой
+                self.options_teacher.append(data[1])
+        
+        self.teacher_in_1 = ttk.Combobox(
+            self.root_extra_info,
+            values=self.options_teacher,
+            style="TCombobox",
+            font=("Helvetica", 25),
+            state="readonly", 
+            foreground="#4D4D4D"
+        )
+        self.teacher_in_1.place(relx=0.72, rely=0.2, relwidth=0.28, relheight=0.14)
+
+        # кнопка добавления внеурочки
+        self.add_extra_btn = ttk.Button(
+            self.root_extra_info,
+            text="Добавить",
+            style = "Main_2.TButton",
+            command = self.add_extra
+        )
+        self.add_extra_btn.place(relx=0.502, rely=0.42, relwidth=0.498, relheight=0.1)
+    ###
+    
+    #Футер
+        self.cancel_1 = ttk.Button(
+            self.root_extra_info,
+            text="Отмена",
+            style = "Main_2.TButton",
+            command = self.root_extra_info.destroy
+        )
+        self.cancel_1.place(relx=0, rely=0.86, relwidth=0.5, relheight=0.14)
+
+        self.save = ttk.Button(
+            self.root_extra_info,
+            text="Сохранить",
+            style = "Main_2.TButton",
+            command = self.save_extra_info
+        )
+        self.save.place(relx=0.5, rely=0.86, relwidth=0.5, relheight=0.14)
+
+        # Очищаем невалидные данные перед отображением
+        self._clean_invalid_teachers()
+        
+        # сразу показываем уже имеющиеся записи, если они есть
+        self.display_PE()
+        self.display_extra()
+
+    def save_extra_info(self):
+        # сохранить изменения в родителе (копируем, чтобы не было алиасов)
+        self.parent.data_PE = list(self.data_PE_les)
+        self.parent.extra_les = list(self.data_extra)
+        # закроем окно до показа сообщения, чтобы при повторном открытии
+        # здесь не осталось старого виджета
+        self.root_extra_info.destroy()
+        warning = popup(self.parent.root_menu_2, "Доп инфа сохранена!", "Успех")
+
+    #Добавление физры на экран
+    def add_PE(self):
+        self.t = self.teacher_in.get()
+        self.d = self.days.get()
+        self.l = self.les_option.get()
+
+        #Проверка на наличие хоть чего-то 
+        if self.t == "":
+            warning = eror_popup(self.root_extra_info, "Учитель физры не выбран")
+            warning.root.mainloop()
+            return
+        if self.d == "":
+            warning = eror_popup(self.root_extra_info, "День физры не выбран")
+            warning.root.mainloop()
+            return
+        if self.l == "":
+            warning = eror_popup(self.root_extra_info, "Урок физры не выбран")
+            warning.root.mainloop()
+            return
+        #
+        #(учитель, день, урок)
+        #Проверка на уже существование урока
+        if len(self.data_PE_les) != 0:
+            for les in self.data_PE_les:
+                if les[1] == self.d and les[2] == self.l:
+                    warning = eror_popup(self.root_extra_info, "Есть физра в этом месте")
+                    warning.root.mainloop()
+                    return
+        ###
+        if len(self.data_PE_les) == 6:
+            warning = eror_popup(self.root_extra_info, "Достигнут лимит кол-ва")
+            warning.root.mainloop()
+            return
+        
+        self.data_PE_les.append([self.t, self.d, self.l])
+        self.display_PE()
+        warning = popup(self.root_extra_info, "Физра добвлена, еще?", "Успех")
+
+    def display_PE(self):
+        for btn in self.PE_buttons:
+            btn.destroy()
+        self.PE_buttons = []
+        for i, lesson in enumerate(self.data_PE_les):
+            # Пропускаем пустые записи (например, удалённые)
+            if not lesson: 
+                continue
+            pos_x = (i % 2) * 0.249  # левые колонки
+            pos_y = (i // 2) * 0.11 + 0.52
+            btn = ttk.Button(
+                self.root_extra_info,
+                text=f"{lesson[1]}", 
+                command=lambda idx=i, l=self.data_PE_les, : self.open_popup_PE(idx, l),
+                style = "Sec_2.TButton"
+            )
+            btn.place(relx=pos_x, rely=pos_y, relwidth=0.249, relheight=0.11)
+            self.PE_buttons.append(btn)
+    
+    def add_extra(self):
+        teacher = self.teacher_in_1.get()
+        if teacher == "":
+            warning = eror_popup(self.root_extra_info, "Учитель не выбран")
+            warning.root.mainloop()
+            return
+        if teacher in self.data_extra:
+            warning = eror_popup(self.root_extra_info, "Учитель уже добавлен")
+            warning.root.mainloop()
+            return
+        self.data_extra.append(teacher)
+        self.display_extra()
+        self.teacher_in_1.set("")
+        warning = popup(self.root_extra_info, "Учитель добавлен, еще?", "Успех")
+    
+    def display_extra(self):
+        for btn in self.extra_buttons:
+            btn.destroy()
+        self.extra_buttons = []
+        for i, teacher in enumerate(self.data_extra):
+            if not teacher:
+                continue
+            pos_x = 0.502 + (i % 2) * 0.249
+            pos_y = (i // 2) * 0.11 + 0.52
+            btn = ttk.Button(
+                self.root_extra_info,
+                text=f"{teacher}",
+                command=lambda idx=i: self.open_popup_extra(idx),
+                style="Sec_2.TButton"
+            )
+            btn.place(relx=pos_x, rely=pos_y, relwidth=0.249, relheight=0.11)
+            self.extra_buttons.append(btn)
+    
+    def open_popup_extra(self, idx):
+        popup_extra_1((idx, self.data_extra), self)
+
+#     # При нажатии на кнопку исключения открывается окно редактирования/удаления
+    def open_popup_PE(self, idx, l):
+        popup_PE_1((idx, l), self)
+
+    def _clean_invalid_teachers(self):
+        """Удаляет из списков данные с удаленными учителями"""
+        # Получаем актуальный список учителей из БД
+        self.con.execute("SELECT Surname, Name, Patrony FROM teachers")
+        valid_teachers = []
+        for row in self.con.fetchall():
+            teacher_fio = f"{row[0]} {row[1][0]}. {row[2][0]}."
+            valid_teachers.append(teacher_fio)
+        
+        # Очищаем данные физры от невалидных учителей
+        self.data_PE_les[:] = [
+            lesson for lesson in self.data_PE_les 
+            if not lesson or lesson[0] in valid_teachers
+        ]
+        
+        # Очищаем данные внеурочки от невалидных учителей
+        self.data_extra[:] = [
+            teacher for teacher in self.data_extra 
+            if not teacher or teacher in valid_teachers
+        ]
+
+#Окно изменения физры
+class popup_PE_1:
+    def __init__(self, data, parent_menu):
+        self.con = parent_menu.con
+        self.idx, self.list_PE = data
+        self.parent_menu = parent_menu
+        self.root_PE = Toplevel(parent_menu.root_extra_info)
+        self.root_PE.title("Изменить исключение")
+        self.root_PE.geometry(f"{int(self.root_PE.winfo_screenwidth() * 0.27)}x{int(self.root_PE.winfo_screenheight()*0.3)}")
+        self.root_PE.resizable(width=False, height=False)
+
+        style_extra_info_class = ttk.Style()
+
+        style_extra_info_class.theme_use('clam')
+
+        style_extra_info_class.configure("TLabel", font=("Helvetica", 30, "italic"))
+
+        style_extra_info_class.configure("TEntry", fieldbackground="#DCDCDC")
+
+        style_extra_info_class.configure("TCombobox", fieldbackground="#DCDCDC", arrowsize = 0)
+        style_extra_info_class.map("TCombobox", fieldbackground=[("readonly", "#DCDCDC")])
+
+
+        style_extra_info_class.configure("Main_67.TButton", font=("Helvetica", 23, "bold"), background="#696969", foreground="white",)
+        style_extra_info_class.map("Main_67.TButton", background=[("active", "#0000CD")])
+
+        style_extra_info_class.configure("Sec_67.TButton", font=("Helvetica", 13, "bold"), background="#696969", foreground="white",)
+        style_extra_info_class.map("Sec_67.TButton", background=[("active", "#4169E1")])
+
+        self.root_PE.configure(bg="#e0dcd4")
+
+
+        self.teacher = ttk.Label(
+            self.root_PE,
+            text = "Учитель:",
+            style="TLabel",
+            anchor="center",
+            font=("Helvetica", 26),
+            )
+        
+        self.teacher.place(relx=0, rely=0, relwidth=0.4, relheight=0.33)
+
+        self.options_teacher = []
+        self.con.execute("""SELECT * FROM teachers""")
+        values = self.con.fetchall() # Проверка на предварительное наличие кабинета 
+
+        for i in values:
+            self.options_teacher.append(f"{i[1]} {i[2][0]}. {i[3][0]}.")
+        
+        self.teacher_in = ttk.Combobox(
+            self.root_PE,
+            values=self.options_teacher,
+            style="TCombobox",
+            font=("Helvetica", 25),
+            state="readonly", 
+            foreground="#4D4D4D"
+        )
+        self.teacher_in.place(relx=0.4, rely=0, relwidth=0.6, relheight=0.33)
+        self.teacher_in.set(self.list_PE[self.idx][0])
+
+
+        self.day = ttk.Label(
+            self.root_PE,
+            text = "День:",
+            style="TLabel",
+            anchor="center",
+            font=("Helvetica", 26),
+            )
+        self.day.place(relx=0, rely=0.33, relwidth=0.2, relheight=0.33)
+
+        self.day_option = ["Понедельник", "Вторник", "Среда", "Четверг", "Пятница", "Суббота"]
+        self.days = ttk.Combobox(
+            self.root_PE,
+            values=self.day_option,
+            style="TCombobox",
+            font=("Helvetica", 25),
+            state="readonly", 
+            foreground="#4D4D4D"
+        )
+        self.days.place(relx=0.2, rely=0.33, relwidth=0.45, relheight=0.33)
+        self.days.set(self.list_PE[self.idx][1])
+
+
+        self.lesson = ttk.Label(
+            self.root_PE,
+            text = "Урок:",
+            style="TLabel",
+            anchor="center",
+            font=("Helvetica", 26),
+            )
+        self.lesson.place(relx=0.65, rely=0.33, relwidth=0.2, relheight=0.33)
+
+        self.les = ["1", "2", "3", "4", "5", "6", "7", "8"]
+        self.les_option = ttk.Combobox(
+            self.root_PE,
+            values=self.les,
+            style="TCombobox",
+            font=("Helvetica", 25),
+            state="readonly", 
+            foreground="#4D4D4D"
+        )
+        self.les_option.place(relx=0.85, rely=0.33, relwidth=0.15, relheight=0.33)
+        self.les_option.set(self.list_PE[self.idx][2])
+
+
+
+        # Футер (кнопки)
+        self.save_button = ttk.Button(
+            self.root_PE,
+            text="Сохранить",
+            style="Main_67.TButton",
+            command=self.save_data  
+        )
+        self.save_button.place(relx=0, rely=0.66, relwidth=0.35, relheight=0.34)
+
+        self.cancel_button = ttk.Button(
+            self.root_PE,
+            text="Отмена",
+            style="Main_67.TButton",
+            command=self.root_PE.destroy
+        )
+        self.cancel_button.place(relx=0.35, rely=0.66, relwidth=0.3, relheight=0.34)
+
+        self.delete_button = ttk.Button(
+            self.root_PE,
+            text="Удалить",
+            style="Main_67.TButton",
+            command=self.delete_data
+        )
+        self.delete_button.place(relx=0.65, rely=0.66, relwidth=0.35, relheight=0.34)
+
+
+    def delete_data(self):
+        if self.idx < len(self.parent_menu.data_PE_les):
+            self.parent_menu.data_PE_les.pop(self.idx)
+        self.parent_menu.display_PE()
+        self.root_PE.destroy()
+        popup(self.parent_menu.root_extra_info, "Физра удалена!", "Успех").root.mainloop()
+
+    #Сохранение инфы
+    def save_data(self):
+        new_t = self.teacher_in.get()        # ← teacher combobox, not les_option
+        new_d = self.days.get()
+        new_l = self.les_option.get()
+    
+        if self.parent_menu.data_PE_les[self.idx] == [new_t, new_d, new_l]:
+            warning = eror_popup(self.root_PE, "Вы ничего не поменяли")
+            warning.root.mainloop()
+            return
+
+        if new_t == "":
+            warning = eror_popup(self.root_PE, "Не выбран учитель")
+            warning.root.mainloop()
+            return
+        
+        if new_d == "":
+            warning = eror_popup(self.root_PE, "Не выбран день")
+            warning.root.mainloop()
+            return
+    
+        if new_l == "":
+            warning = eror_popup(self.root_PE, "Не выбран урок")
+            warning.root.mainloop()
+            return
+
+# ------------------------------
+# popup для редактирования/удаления внеурочки
+class popup_extra_1:
+    def __init__(self, data, parent_menu):
+        self.idx, self.list_extra = data
+        self.parent_menu = parent_menu
+        self.root_ex = Toplevel(parent_menu.root_extra_info)
+        self.root_ex.title("Изменить внеурочку")
+        self.root_ex.geometry(f"{int(self.root_ex.winfo_screenwidth() * 0.27)}x{int(self.root_ex.winfo_screenheight()*0.25)}")
+        self.root_ex.resizable(width=False, height=False)
+
+        style = ttk.Style()
+        style.theme_use('clam')
+        style.configure("TLabel", font=("Helvetica", 30, "italic"))
+        style.configure("TCombobox", fieldbackground="#DCDCDC", arrowsize=0)
+        style.map("TCombobox", fieldbackground=[("readonly", "#DCDCDC")])
+        style.configure("Main_67.TButton", font=("Helvetica", 23, "bold"), background="#696969", foreground="white")
+        style.map("Main_67.TButton", background=[("active", "#0000CD")])
+
+        self.teacher_lbl = ttk.Label(
+            self.root_ex,
+            text="Учитель:",
+            style="TLabel",
+            anchor="center",
+            font=("Helvetica", 26)
+        )
+        self.teacher_lbl.place(relx=0, rely=0, relwidth=0.4, relheight=0.5)
+
+        self.teacher_box = ttk.Combobox(
+            self.root_ex,
+            values=parent_menu.options_teacher,
+            style="TCombobox",
+            font=("Helvetica", 25),
+            state="readonly",
+            foreground="#4D4D4D"
+        )
+        self.teacher_box.place(relx=0.4, rely=0, relwidth=0.6, relheight=0.5)
+        self.teacher_box.set(self.list_extra[self.idx])
+
+        self.save_btn = ttk.Button(
+            self.root_ex,
+            text="Сохранить",
+            style="Main_67.TButton",
+            command=self.save_data
+        )
+        self.save_btn.place(relx=0, rely=0.5, relwidth=0.35, relheight=0.5)
+
+        self.cancel_btn = ttk.Button(
+            self.root_ex,
+            text="Отмена",
+            style="Main_67.TButton",
+            command=self.root_ex.destroy
+        )
+        self.cancel_btn.place(relx=0.35, rely=0.5, relwidth=0.3, relheight=0.5)
+
+        self.delete_btn = ttk.Button(
+            self.root_ex,
+            text="Удалить",
+            style="Main_67.TButton",
+            command=self.delete_data
+        )
+        self.delete_btn.place(relx=0.65, rely=0.5, relwidth=0.35, relheight=0.5)
+
+    def save_data(self):
+        new_t = self.teacher_box.get()
+        if new_t == "":
+            warning = eror_popup(self.root_ex, "Учитель не выбран")
+            warning.root.mainloop()
+            return
+        if new_t == self.list_extra[self.idx]:
+            warning = eror_popup(self.root_ex, "Ничего не поменяли")
+            warning.root.mainloop()
+            return
+        if new_t in self.list_extra:
+            warning = eror_popup(self.root_ex, "Такой учитель уже добавлен")
+            warning.root.mainloop()
+            return
+        self.list_extra[self.idx] = new_t
+        self.parent_menu.display_extra()
+        popup(self.parent_menu.root_extra_info, "Учитель изменён", "Успех").root.mainloop()
+        self.root_ex.destroy()
+
+    def delete_data(self):
+        self.list_extra.pop(self.idx)
+        self.parent_menu.display_extra()
+        self.root_ex.destroy()
+        popup(self.parent_menu.root_extra_info, "Учитель удалён", "Успех").root.mainloop()
+
+
+        
+
+# les_option
+# day_option
+# teacher_in
 
 
 #<Изменение урока> - # 
@@ -2281,8 +3711,24 @@ class change_parallel:
         # Данные для параллели
         self.full_data_class = []  # для хранения предметов
         self.clas_buttons = []     # для хранения кнопок
+        # собственные списки доп. информации
+        self.data_PE = []          # список физры
+        self.extra_les = []        # список внеурочек (только учителя)
+        # варианты учителей для комбобоксов
+        self.options_teacher = []
+        self.con.execute("""SELECT * FROM teachers""")
+        for teacher in self.con.fetchall():
+            self.options_teacher.append(f"{teacher[1]} {teacher[2][0]}. {teacher[3][0]}.")
         
         # Получаем данные из БД
+        # сначала определим id параллели, чтобы потом подгрузить pe/extra
+        self.con.execute(
+            "SELECT id FROM parallels WHERE Number = ? AND Letter = ?",
+            (self.num, self.letter)
+        )
+        row = self.con.fetchone()
+        parallel_id = row[0] if row else None
+
         self.con.execute(
            """
             SELECT 
@@ -2300,6 +3746,14 @@ class change_parallel:
         lessons_data = self.con.fetchall()
         for lesson in lessons_data:
             self.full_data_class.append(list(lesson))
+        # загрузка pe и extra в собственные списки
+        if parallel_id is not None:
+            self.con.execute("SELECT Teacher, Day, Lesson FROM pe WHERE Id_parallel = ?", (parallel_id,))
+            for row in self.con.fetchall():
+                self.data_PE.append(list(row))
+            self.con.execute("SELECT Teacher FROM extra WHERE Id_parallel = ?", (parallel_id,))
+            for row in self.con.fetchall():
+                self.extra_les.append(row[0])
     ###
 
     #Виджеты изменения параллели
@@ -2321,6 +3775,16 @@ class change_parallel:
             bd=1
         )
         separator_2.place(relx=0.29, rely=0.14, relwidth=0.004, relheight=1)
+
+        separator_3 = Frame(
+            self.root_popup_2, 
+            height=3,          
+            bg='grey',        
+            relief=FLAT,
+            bd=1               
+        )
+        separator_3.place(relx=0.73, rely=0, relwidth= 0.004, relheight= 0.14) #Вертикальная
+
     ###
 
     # Блок номера
@@ -2340,7 +3804,7 @@ class change_parallel:
             foreground="#4D4D4D"
         )
         self.number.set(self.num)
-        self.number.place(relx=0.3, rely=0, relwidth=0.10, relheight=0.14)
+        self.number.place(relx=0.3, rely=0, relwidth=0.08, relheight=0.14)
     ###
 
     #Блок буквы
@@ -2349,7 +3813,7 @@ class change_parallel:
             text="Буква:",
             style="TLabel"
         )
-        self.creating_letter.place(relx=0.5, rely=0, relwidth=0.20, relheight=0.14)
+        self.creating_letter.place(relx=0.45, rely=0, relwidth=0.20, relheight=0.14)
 
         self.letter_box = ttk.Combobox(
             self.root_popup_2,
@@ -2360,7 +3824,17 @@ class change_parallel:
             foreground="#4D4D4D"
         )
         self.letter_box.set(self.letter)
-        self.letter_box.place(relx=0.7, rely=0, relwidth=0.10, relheight=0.14)
+        self.letter_box.place(relx=0.65, rely=0, relwidth=0.08, relheight=0.14)
+    ###
+
+    # Блок доп инфы (PE / extra)
+        self.add_infa = ttk.Button(
+            self.root_popup_2,
+            text="Доп инфа",
+            style = "Main_2_1.TButton",
+            command = self.open_dop_infa
+        )
+        self.add_infa.place(relx=0.734, rely=0, relwidth=0.266, relheight=0.14)
     ###
 
     #Блок выбора урока
@@ -2370,7 +3844,7 @@ class change_parallel:
             style="TLabel",
             anchor="center"
             )
-        self.creating_subject.place(relx=0, rely=0.15, relwidth=0.28, relheight=0.1)
+        self.creating_subject.place(relx=0, rely=0.15, relwidth=0.29, relheight=0.1)
 
         self.options_3 = ["Алгебра",
             "Геометрия",
@@ -2413,6 +3887,7 @@ class change_parallel:
             self.root_popup_2,
             text = "Учитель:",
             font=("Helvetica", 30),
+            
             anchor="center"
             )
         self.creating_teacher.place(relx=0, rely=0.35, relwidth=0.29, relheight=0.1)
@@ -2420,6 +3895,7 @@ class change_parallel:
         self.teacher = ttk.Combobox(
             self.root_popup_2,
             values=self.options_teacher,
+            state="readonly", 
             font=("Helvetica", 30),
         )
         self.teacher.place(relx=0, rely=0.45, relwidth=0.29, relheight=0.1)
@@ -2485,6 +3961,10 @@ class change_parallel:
     ###
 
         self.display_class() #Отображаем предметы
+    
+    # метод открытия окна доп. инфы
+    def open_dop_infa(self):
+        extra_info_class_2(self, self.root_popup_2, self.con, self.base)
     
     #Функционал
     #Добавление предмета
@@ -2625,7 +4105,10 @@ class change_parallel:
     
         # Удаляем старые уроки
         self.con.execute("DELETE FROM lessons WHERE Id_parallel = ?", (parallel_id,))
-    
+        # очистка pe и extra
+        self.con.execute("DELETE FROM pe WHERE Id_parallel = ?", (parallel_id,))
+        self.con.execute("DELETE FROM extra WHERE Id_parallel = ?", (parallel_id,))
+        
         # Добавляем новые уроки
         for subject_data in self.full_data_class:
             if subject_data:  # Проверяем, что данные не пустые
@@ -2646,8 +4129,19 @@ class change_parallel:
                     "INSERT INTO lessons (Id_parallel, Subject, Hours, Id_teacher) VALUES (?, ?, ?, ?)",
                     (parallel_id, subject_data[0], subject_data[2], teacher_id)
                 )
-
-
+        # добавляем pe из собственного списка
+        for data in self.data_PE:
+            if data:
+                self.con.execute(
+                    "INSERT INTO pe (Id_parallel, Teacher, Day, Lesson) VALUES (?, ?, ?, ?)",
+                    (parallel_id, data[0], data[1], data[2])
+                )
+        # добавляем extra из собственного списка
+        for teacher in self.extra_les:
+            self.con.execute(
+                "INSERT INTO extra (Id_parallel, Teacher) VALUES (?, ?)",
+                (parallel_id, teacher)
+            )
         self.base.commit()
 
         self.parent_con.update_buttons()  
@@ -2692,6 +4186,12 @@ class change_parallel:
         # Удаляем все уроки этой параллели
         self.con.execute("DELETE FROM lessons WHERE Id_parallel = ?", (parallel_id,))
         
+        # Удаляем физру этой параллели
+        self.con.execute("DELETE FROM pe WHERE Id_parallel = ?", (parallel_id,))
+        
+        # Удаляем внеурочки этой параллели
+        self.con.execute("DELETE FROM extra WHERE Id_parallel = ?", (parallel_id,))
+        
         # Удаляем саму параллель
         self.con.execute("DELETE FROM parallels WHERE id = ?", (parallel_id,))
         
@@ -2701,6 +4201,655 @@ class change_parallel:
         self.root_popup_2.destroy()
         popup(self.parent_con.root_menu_3, f"Параллель {self.num}{self.letter} удалена!", "Успех").root.mainloop()
 
+
+#<Окно доп инфы для change_parallel> - 
+class extra_info_class_2:
+    def __init__(self, parent, paren_root, con, base):
+        self.parent = parent
+        self.root_extra_info = Toplevel(paren_root)
+        self.con = con
+        self.base = base
+        self.root_extra_info.title("Доп инфа")
+        self.root_extra_info.geometry(f"{int(self.root_extra_info.winfo_screenwidth() * 0.54)}x{int(self.root_extra_info.winfo_screenheight()*0.58)}")
+        self.root_extra_info.resizable(width=False, height=False)
+
+        self.data_PE_les = list(self.parent.data_PE)
+        self.PE_buttons = []
+        # дополнительный список для внеурочек
+        self.data_extra = list(getattr(self.parent, 'extra_les', []))
+        self.extra_buttons = []
+        
+        # Очищаем невалидные данные (удаленные учителя)
+        self._clean_invalid_teachers()
+
+        style_extra_info_class = ttk.Style()
+
+        style_extra_info_class.theme_use('clam')
+
+        style_extra_info_class.configure("TLabel", font=("Helvetica", 30, "italic"))
+
+        style_extra_info_class.configure("TEntry", fieldbackground="#DCDCDC")
+
+        style_extra_info_class.configure("TCombobox", fieldbackground="#DCDCDC", arrowsize = 0)
+        style_extra_info_class.map("TCombobox", fieldbackground=[("readonly", "#DCDCDC")])
+
+
+        style_extra_info_class.configure("Main_2.TButton", font=("Helvetica", 30, "bold"), background="#696969", foreground="white",)
+        style_extra_info_class.map("Main_2.TButton", background=[("active", "#0000CD")])
+
+        style_extra_info_class.configure("Sec_2.TButton", font=("Helvetica", 13, "bold"), background="#696969", foreground="white",)
+        style_extra_info_class.map("Sec_2.TButton", background=[("active", "#4169E1")])
+
+        self.root_extra_info.configure(bg="#e0dcd4")
+
+    #Граница
+        separator_1 = Frame(
+            self.root_extra_info, 
+            height=3,          
+            bg='grey',        
+            relief=FLAT,
+            bd=1               
+        )
+        separator_1.place(relx=0.498, rely=0, relwidth= 0.004, relheight= 0.86) #Вертикальная
+    ###
+
+    #Блок физкультур
+        self.PE_les = ttk.Label(
+            self.root_extra_info,
+            text = "Физра:",
+            style="TLabel",
+            anchor="center"
+            )
+        self.PE_les.place(relx=0, rely=0, relwidth=0.498, relheight=0.14)
+
+        self.teacher = ttk.Label(
+            self.root_extra_info,
+            text = "Учитель:",
+            style="TLabel",
+            anchor="center",
+            font=("Helvetica", 26),
+            )
+        
+        self.teacher.place(relx=0, rely=0.14, relwidth=0.2, relheight=0.14)
+
+        self.options_teacher = []
+        self.con.execute("""SELECT * FROM teachers""")
+        values = self.con.fetchall() 
+
+        for i in values:
+            self.options_teacher.append(f"{i[1]} {i[2][0]}. {i[3][0]}.")
+        
+        self.teacher_in = ttk.Combobox(
+            self.root_extra_info,
+            values=self.options_teacher,
+            style="TCombobox",
+            font=("Helvetica", 25),
+            state="readonly", 
+            foreground="#4D4D4D"
+        )
+        self.teacher_in.place(relx=0.2, rely=0.14, relwidth=0.298, relheight=0.14)
+
+
+        self.day = ttk.Label(
+            self.root_extra_info,
+            text = "День:",
+            style="TLabel",
+            anchor="center",
+            font=("Helvetica", 26),
+            )
+        self.day.place(relx=0, rely=0.28, relwidth=0.1, relheight=0.14)
+
+        self.day_option = ["Понедельник", "Вторник", "Среда", "Четверг", "Пятница", "Суббота"]
+        self.days = ttk.Combobox(
+            self.root_extra_info,
+            values=self.day_option,
+            style="TCombobox",
+            font=("Helvetica", 24),
+            state="readonly", 
+            foreground="#4D4D4D"
+        )
+        self.days.place(relx=0.1, rely=0.28, relwidth=0.2, relheight=0.14)
+
+
+        self.lesson = ttk.Label(
+            self.root_extra_info,
+            text = "Урок:",
+            style="TLabel",
+            anchor="center",
+            font=("Helvetica", 26),
+            )
+        self.lesson.place(relx=0.3, rely=0.28, relwidth=0.1, relheight=0.14)
+
+        self.les = ["1", "2", "3", "4", "5", "6", "7", "8"]
+        self.les_option = ttk.Combobox(
+            self.root_extra_info,
+            values=self.les,
+            style="TCombobox",
+            font=("Helvetica", 24),
+            state="readonly", 
+            foreground="#4D4D4D"
+        )
+        self.les_option.place(relx=0.4, rely=0.28, relwidth=0.098, relheight=0.14)
+
+        #Кнопка добавления урока 
+        self.add_clas = ttk.Button(
+            self.root_extra_info,
+            text="Добавить",
+            style = "Main_2.TButton",
+            command = self.add_PE
+        )
+        self.add_clas.place(relx=0, rely=0.42, relwidth=0.498, relheight=0.1)
+    ###
+
+    ###
+
+    #Блок доп уроков
+        self.extra_les = ttk.Label(
+            self.root_extra_info,
+            text = "Внеурочка:",
+            style="TLabel",
+            anchor="center",
+            )
+        self.extra_les.place(relx=0.52, rely=0, relwidth=0.498, relheight=0.14)
+
+        self.teacher_e = ttk.Label(
+            self.root_extra_info,
+            text = "Учитель:",
+            style="TLabel",
+            anchor="center",
+            font=("Helvetica", 26),
+            )
+        
+        self.teacher_e.place(relx=0.52, rely=0.2, relwidth=0.2, relheight=0.14)
+
+        self.options_teacher = []
+
+        for data in self.parent.full_data_class:
+            if data:  # Проверяем, что элемент не пустой
+                self.options_teacher.append(data[1])
+        
+        self.teacher_in_1 = ttk.Combobox(
+            self.root_extra_info,
+            values=self.options_teacher,
+            style="TCombobox",
+            font=("Helvetica", 25),
+            state="readonly", 
+            foreground="#4D4D4D"
+        )
+        self.teacher_in_1.place(relx=0.72, rely=0.2, relwidth=0.28, relheight=0.14)
+
+        # кнопка добавления внеурочки
+        self.add_extra_btn = ttk.Button(
+            self.root_extra_info,
+            text="Добавить",
+            style = "Main_2.TButton",
+            command = self.add_extra
+        )
+        self.add_extra_btn.place(relx=0.502, rely=0.42, relwidth=0.498, relheight=0.1)
+    ###
+    
+    #Футер
+        self.cancel_1 = ttk.Button(
+            self.root_extra_info,
+            text="Отмена",
+            style = "Main_2.TButton",
+            command = self.root_extra_info.destroy
+        )
+        self.cancel_1.place(relx=0, rely=0.86, relwidth=0.5, relheight=0.14)
+
+        self.save = ttk.Button(
+            self.root_extra_info,
+            text="Сохранить",
+            style = "Main_2.TButton",
+            command = self.save_extra_info
+        )
+        self.save.place(relx=0.5, rely=0.86, relwidth=0.5, relheight=0.14)
+
+        # Очищаем невалидные данные перед отображением
+        self._clean_invalid_teachers()
+        
+        # сразу показываем уже имеющиеся записи, если они есть
+        self.display_PE()
+        self.display_extra()
+
+    def save_extra_info(self):
+        # сохранить изменения в родителе (копируем, чтобы не было алиасов)
+        self.parent.data_PE = list(self.data_PE_les)
+        self.parent.extra_les = list(self.data_extra)
+        
+        # Сохраняем в базу данных
+        # Получаем parallel_id по номеру и букве класса
+        self.con.execute(
+            "SELECT id FROM parallels WHERE Number = ? AND Letter = ?",
+            (self.parent.num, self.parent.letter)
+        )
+        row = self.con.fetchone()
+        parallel_id = row[0] if row else None
+        
+        if parallel_id is not None:
+            # Удаляем старые записи физры и внеурочки
+            self.con.execute("DELETE FROM pe WHERE Id_parallel = ?", (parallel_id,))
+            self.con.execute("DELETE FROM extra WHERE Id_parallel = ?", (parallel_id,))
+            
+            # Добавляем новые записи физры
+            for data in self.data_PE_les:
+                if data:  # Проверяем, что данные не пустые
+                    self.con.execute(
+                        "INSERT INTO pe (Id_parallel, Teacher, Day, Lesson) VALUES (?, ?, ?, ?)",
+                        (parallel_id, data[0], data[1], data[2])
+                    )
+            
+            # Добавляем новые записи внеурочки
+            for teacher in self.data_extra:
+                if teacher:  # Проверяем, что данные не пустые
+                    self.con.execute(
+                        "INSERT INTO extra (Id_parallel, Teacher) VALUES (?, ?)",
+                        (parallel_id, teacher)
+                    )
+            
+            # Коммитим изменения
+            self.base.commit()
+        
+        # закроем окно до показа сообщения, чтобы при повторном открытии
+        # здесь не осталось старого виджета
+        self.root_extra_info.destroy()
+        warning = popup(self.parent.root_popup_2, "Доп инфа сохранена!", "Успех")
+
+    #Добавление физры на экран
+    def add_PE(self):
+        self.t = self.teacher_in.get()
+        self.d = self.days.get()
+        self.l = self.les_option.get()
+
+        #Проверка на наличие хоть чего-то 
+        if self.t == "":
+            warning = eror_popup(self.root_extra_info, "Учитель физры не выбран")
+            warning.root.mainloop()
+            return
+        if self.d == "":
+            warning = eror_popup(self.root_extra_info, "День физры не выбран")
+            warning.root.mainloop()
+            return
+        if self.l == "":
+            warning = eror_popup(self.root_extra_info, "Урок физры не выбран")
+            warning.root.mainloop()
+            return
+        #
+        #(учитель, день, урок)
+        #Проверка на уже существование урока
+        if len(self.data_PE_les) != 0:
+            for les in self.data_PE_les:
+                if les[1] == self.d and les[2] == self.l:
+                    warning = eror_popup(self.root_extra_info, "Есть физра в этом месте")
+                    warning.root.mainloop()
+                    return
+        ###
+        if len(self.data_PE_les) == 6:
+            warning = eror_popup(self.root_extra_info, "Достигнут лимит кол-ва")
+            warning.root.mainloop()
+            return
+        
+        self.data_PE_les.append([self.t, self.d, self.l])
+        self.display_PE()
+        # Очищаем поля ввода
+        self.teacher_in.set("")
+        self.days.set("")
+        self.les_option.set("")
+        warning = popup(self.root_extra_info, "Физра добвлена, еще?", "Успех").root.mainloop()
+
+    def display_PE(self):
+        for btn in self.PE_buttons:
+            btn.destroy()
+        self.PE_buttons = []
+        for actual_idx, lesson in enumerate(self.data_PE_les):
+            # Пропускаем пустые записи (например, удалённые)
+            if not lesson: 
+                continue
+            pos_x = (actual_idx % 2) * 0.249
+            pos_y = (actual_idx // 2) * 0.11 + 0.52
+            btn = ttk.Button(
+                self.root_extra_info,
+                text=f"{lesson[1]}", 
+                command=lambda idx=actual_idx, l=self.data_PE_les: self.open_popup_PE(idx, l),
+                style = "Sec_2.TButton"
+            )
+            btn.place(relx=pos_x, rely=pos_y, relwidth=0.249, relheight=0.11)
+            self.PE_buttons.append(btn)
+    
+    def add_extra(self):
+        teacher = self.teacher_in_1.get()
+        if teacher == "":
+            warning = eror_popup(self.root_extra_info, "Учитель не выбран")
+            warning.root.mainloop()
+            return
+        if teacher in self.data_extra:
+            warning = eror_popup(self.root_extra_info, "Учитель уже добавлен")
+            warning.root.mainloop()
+            return
+        self.data_extra.append(teacher)
+        self.display_extra()
+        self.teacher_in_1.set("")
+        warning = popup(self.root_extra_info, "Учитель добавлен, еще?", "Успех").root.mainloop()
+    
+    def display_extra(self):
+        for btn in self.extra_buttons:
+            btn.destroy()
+        self.extra_buttons = []
+        for actual_idx, teacher in enumerate(self.data_extra):
+            if not teacher:
+                continue
+            pos_x = 0.502 + (actual_idx % 2) * 0.249
+            pos_y = (actual_idx // 2) * 0.11 + 0.52
+            btn = ttk.Button(
+                self.root_extra_info,
+                text=f"{teacher}",
+                command=lambda idx=actual_idx: self.open_popup_extra(idx),
+                style="Sec_2.TButton"
+            )
+            btn.place(relx=pos_x, rely=pos_y, relwidth=0.249, relheight=0.11)
+            self.extra_buttons.append(btn)
+    
+    def open_popup_extra(self, idx):
+        popup_extra_2((idx, self.data_extra), self)
+
+    def open_popup_PE(self, idx, l):
+        popup_PE_2((idx, l), self)
+
+    def _clean_invalid_teachers(self):
+        """Удаляет из списков данные с удаленными учителями"""
+        # Получаем актуальный список учителей из БД
+        self.con.execute("SELECT Surname, Name, Patrony FROM teachers")
+        valid_teachers = []
+        for row in self.con.fetchall():
+            teacher_fio = f"{row[0]} {row[1][0]}. {row[2][0]}."
+            valid_teachers.append(teacher_fio)
+        
+        # Очищаем данные физры от невалидных учителей
+        self.data_PE_les[:] = [
+            lesson for lesson in self.data_PE_les 
+            if not lesson or lesson[0] in valid_teachers
+        ]
+        
+        # Очищаем данные внеурочки от невалидных учителей
+        self.data_extra[:] = [
+            teacher for teacher in self.data_extra 
+            if not teacher or teacher in valid_teachers
+        ]
+
+
+#Окно изменения физры для change_parallel
+class popup_PE_2:
+    def __init__(self, data, parent_menu):
+        self.con = parent_menu.con
+        self.idx, self.list_PE = data
+        self.parent_menu = parent_menu
+        self.root_PE = Toplevel(parent_menu.root_extra_info)
+        self.root_PE.title("Изменить исключение")
+        self.root_PE.geometry(f"{int(self.root_PE.winfo_screenwidth() * 0.27)}x{int(self.root_PE.winfo_screenheight()*0.3)}")
+        self.root_PE.resizable(width=False, height=False)
+
+        style_extra_info_class = ttk.Style()
+
+        style_extra_info_class.theme_use('clam')
+
+        style_extra_info_class.configure("TLabel", font=("Helvetica", 30, "italic"))
+
+        style_extra_info_class.configure("TEntry", fieldbackground="#DCDCDC")
+
+        style_extra_info_class.configure("TCombobox", fieldbackground="#DCDCDC", arrowsize = 0)
+        style_extra_info_class.map("TCombobox", fieldbackground=[("readonly", "#DCDCDC")])
+
+
+        style_extra_info_class.configure("Main_67.TButton", font=("Helvetica", 23, "bold"), background="#696969", foreground="white",)
+        style_extra_info_class.map("Main_67.TButton", background=[("active", "#0000CD")])
+
+        style_extra_info_class.configure("Sec_67.TButton", font=("Helvetica", 13, "bold"), background="#696969", foreground="white",)
+        style_extra_info_class.map("Sec_67.TButton", background=[("active", "#4169E1")])
+
+        self.root_PE.configure(bg="#e0dcd4")
+
+
+        self.teacher = ttk.Label(
+            self.root_PE,
+            text = "Учитель:",
+            style="TLabel",
+            anchor="center",
+            font=("Helvetica", 26),
+            )
+        
+        self.teacher.place(relx=0, rely=0, relwidth=0.4, relheight=0.33)
+
+        self.options_teacher = []
+        self.con.execute("""SELECT * FROM teachers""")
+        values = self.con.fetchall() 
+
+        for i in values:
+            self.options_teacher.append(f"{i[1]} {i[2][0]}. {i[3][0]}.")
+        
+        self.teacher_in = ttk.Combobox(
+            self.root_PE,
+            values=self.options_teacher,
+            style="TCombobox",
+            font=("Helvetica", 25),
+            state="readonly", 
+            foreground="#4D4D4D"
+        )
+        self.teacher_in.place(relx=0.4, rely=0, relwidth=0.6, relheight=0.33)
+        self.teacher_in.set(self.list_PE[self.idx][0])
+
+
+        self.day = ttk.Label(
+            self.root_PE,
+            text = "День:",
+            style="TLabel",
+            anchor="center",
+            font=("Helvetica", 26),
+            )
+        self.day.place(relx=0, rely=0.33, relwidth=0.2, relheight=0.33)
+
+        self.day_option = ["Понедельник", "Вторник", "Среда", "Четверг", "Пятница", "Суббота"]
+        self.days = ttk.Combobox(
+            self.root_PE,
+            values=self.day_option,
+            style="TCombobox",
+            font=("Helvetica", 25),
+            state="readonly", 
+            foreground="#4D4D4D"
+        )
+        self.days.place(relx=0.2, rely=0.33, relwidth=0.45, relheight=0.33)
+        self.days.set(self.list_PE[self.idx][1])
+
+
+        self.lesson = ttk.Label(
+            self.root_PE,
+            text = "Урок:",
+            style="TLabel",
+            anchor="center",
+            font=("Helvetica", 26),
+            )
+        self.lesson.place(relx=0.65, rely=0.33, relwidth=0.2, relheight=0.33)
+
+        self.les = ["1", "2", "3", "4", "5", "6", "7", "8"]
+        self.les_option = ttk.Combobox(
+            self.root_PE,
+            values=self.les,
+            style="TCombobox",
+            font=("Helvetica", 25),
+            state="readonly", 
+            foreground="#4D4D4D"
+        )
+        self.les_option.place(relx=0.85, rely=0.33, relwidth=0.15, relheight=0.33)
+        self.les_option.set(self.list_PE[self.idx][2])
+
+
+
+        # Футер (кнопки)
+        self.save_button = ttk.Button(
+            self.root_PE,
+            text="Сохранить",
+            style="Main_67.TButton",
+            command=self.save_data  
+        )
+        self.save_button.place(relx=0, rely=0.66, relwidth=0.35, relheight=0.34)
+
+        self.cancel_button = ttk.Button(
+            self.root_PE,
+            text="Отмена",
+            style="Main_67.TButton",
+            command=self.root_PE.destroy
+        )
+        self.cancel_button.place(relx=0.35, rely=0.66, relwidth=0.3, relheight=0.34)
+
+        self.delete_button = ttk.Button(
+            self.root_PE,
+            text="Удалить",
+            style="Main_67.TButton",
+            command=self.delete_data
+        )
+        self.delete_button.place(relx=0.65, rely=0.66, relwidth=0.35, relheight=0.34)
+
+
+    def delete_data(self):
+        if self.idx < len(self.parent_menu.data_PE_les):
+            self.parent_menu.data_PE_les.pop(self.idx)
+        self.parent_menu.display_PE()
+        self.root_PE.destroy()
+        popup(self.parent_menu.root_extra_info, "Физра удалена!", "Успех").root.mainloop()
+
+    #Сохранение инфы
+    def save_data(self):
+        # Проверка правильности индекса
+        if self.idx >= len(self.parent_menu.data_PE_les):
+            warning = eror_popup(self.root_PE, "Ошибка индекса")
+            warning.root.mainloop()
+            self.root_PE.destroy()
+            return
+
+        new_t = self.teacher_in.get()        
+        new_d = self.days.get()
+        new_l = self.les_option.get()
+    
+        if self.parent_menu.data_PE_les[self.idx] == [new_t, new_d, new_l]:
+            warning = eror_popup(self.root_PE, "Вы ничего не поменяли")
+            warning.root.mainloop()
+            return
+
+        if new_t == "":
+            warning = eror_popup(self.root_PE, "Не выбран учитель")
+            warning.root.mainloop()
+            return
+        
+        if new_d == "":
+            warning = eror_popup(self.root_PE, "Не выбран день")
+            warning.root.mainloop()
+            return
+    
+        if new_l == "":
+            warning = eror_popup(self.root_PE, "Не выбран урок")
+            warning.root.mainloop()
+            return
+
+        # Обновляем данные
+        self.parent_menu.data_PE_les[self.idx] = [new_t, new_d, new_l]
+        self.parent_menu.display_PE()
+        popup(self.parent_menu.root_extra_info, "Физра изменена!", "Успех").root.mainloop()
+        self.root_PE.destroy()
+
+
+#Окно изменения внеурочки для change_parallel
+class popup_extra_2:
+    def __init__(self, data, parent_menu):
+        self.idx, self.list_extra = data
+        self.parent_menu = parent_menu
+        self.root_ex = Toplevel(parent_menu.root_extra_info)
+        self.root_ex.title("Изменить внеурочку")
+        self.root_ex.geometry(f"{int(self.root_ex.winfo_screenwidth() * 0.27)}x{int(self.root_ex.winfo_screenheight()*0.25)}")
+        self.root_ex.resizable(width=False, height=False)
+
+        style = ttk.Style()
+        style.theme_use('clam')
+        style.configure("TLabel", font=("Helvetica", 30, "italic"))
+        style.configure("TCombobox", fieldbackground="#DCDCDC", arrowsize=0)
+        style.map("TCombobox", fieldbackground=[("readonly", "#DCDCDC")])
+        style.configure("Main_67.TButton", font=("Helvetica", 23, "bold"), background="#696969", foreground="white")
+        style.map("Main_67.TButton", background=[("active", "#0000CD")])
+
+        self.teacher_lbl = ttk.Label(
+            self.root_ex,
+            text="Учитель:",
+            style="TLabel",
+            anchor="center",
+            font=("Helvetica", 26)
+        )
+        self.teacher_lbl.place(relx=0, rely=0, relwidth=0.4, relheight=0.5)
+
+        self.teacher_box = ttk.Combobox(
+            self.root_ex,
+            values=parent_menu.options_teacher,
+            style="TCombobox",
+            font=("Helvetica", 25),
+            state="readonly",
+            foreground="#4D4D4D"
+        )
+        self.teacher_box.place(relx=0.4, rely=0, relwidth=0.6, relheight=0.5)
+        self.teacher_box.set(self.list_extra[self.idx])
+
+        self.save_btn = ttk.Button(
+            self.root_ex,
+            text="Сохранить",
+            style="Main_67.TButton",
+            command=self.save_data
+        )
+        self.save_btn.place(relx=0, rely=0.5, relwidth=0.35, relheight=0.5)
+
+        self.cancel_btn = ttk.Button(
+            self.root_ex,
+            text="Отмена",
+            style="Main_67.TButton",
+            command=self.root_ex.destroy
+        )
+        self.cancel_btn.place(relx=0.35, rely=0.5, relwidth=0.3, relheight=0.5)
+
+        self.delete_btn = ttk.Button(
+            self.root_ex,
+            text="Удалить",
+            style="Main_67.TButton",
+            command=self.delete_data
+        )
+        self.delete_btn.place(relx=0.65, rely=0.5, relwidth=0.35, relheight=0.5)
+
+    def save_data(self):
+        # Проверка правильности индекса
+        if self.idx >= len(self.parent_menu.data_extra):
+            warning = eror_popup(self.root_ex, "Ошибка индекса")
+            warning.root.mainloop()
+            self.root_ex.destroy()
+            return
+        
+        new_t = self.teacher_box.get()
+        if new_t == "":
+            warning = eror_popup(self.root_ex, "Учитель не выбран")
+            warning.root.mainloop()
+            return
+        if new_t == self.parent_menu.data_extra[self.idx]:
+            warning = eror_popup(self.root_ex, "Ничего не поменяли")
+            warning.root.mainloop()
+            return
+        if new_t in self.parent_menu.data_extra:
+            warning = eror_popup(self.root_ex, "Такой учитель уже добавлен")
+            warning.root.mainloop()
+            return
+        self.parent_menu.data_extra[self.idx] = new_t
+        self.parent_menu.display_extra()
+        popup(self.parent_menu.root_extra_info, "Учитель изменён", "Успех").root.mainloop()
+        self.root_ex.destroy()
+
+    def delete_data(self):
+        if self.idx < len(self.parent_menu.data_extra):
+            self.parent_menu.data_extra.pop(self.idx)
+        self.parent_menu.display_extra()
+        self.root_ex.destroy()
+        popup(self.parent_menu.root_extra_info, "Учитель удалён", "Успех").root.mainloop()
 
 
 #<Изменение предмета> - # +++
@@ -2994,6 +5143,7 @@ class menu_add_room:
               
         )
         self.graphskiy_or_not.place(relx=0.5, rely=0.15, relwidth=0.5, relheight=0.15)
+        self.graphskiy_or_not.set("Графский или нет")
 
         
         # Блок большой/маленький
@@ -3015,7 +5165,7 @@ class menu_add_room:
             foreground="#4D4D4D"
         )
         self.small_or_big.place(relx=0.5, rely=0.3, relwidth=0.5, relheight=0.15)
-
+        self.small_or_big.set("Маленький или большой каб.")
         # Блок выбора приоритетного кабинета
         
         self.subjects = [
@@ -3162,7 +5312,7 @@ class menu_add_room:
         
         self.input_number_room.delete(0, END)
         self.graphskiy_or_not.set('Графский или лицей')
-        self.small_or_big.set('Маленький или большой кабинет')
+        self.small_or_big.set('Маленький или большой каб.')
         self.prio_subjects.selection_clear(0, END)
 ###
      
@@ -3218,7 +5368,18 @@ class menu_check_room:
             style="TLabel",
             anchor="center"
         )
-        self.ne_graphskiy.place(relx=0, rely=0, relwidth=0.5, relheight=0.09)
+        self.ne_graphskiy.place(relx=0.1, rely=0, relwidth=0.3, relheight=0.09)
+
+        self.input_search_g = ttk.Entry(
+            self.root_menu_5,
+            style="TEntry",
+            font=("Helvetica", 25),
+            foreground="#4D4D4D"
+        )
+        self.input_search_g.place(relx=0, rely=0, relwidth=0.1, relheight=0.09)
+        self.input_search_g.bind("<KeyRelease>", lambda e, b="Графский": self.on_search_change(e, b))
+
+
     
         self.graphskiy = ttk.Label(
             self.root_menu_5,
@@ -3226,15 +5387,32 @@ class menu_check_room:
             style="TLabel",
             anchor="center"
         )
-        self.graphskiy.place(relx=0.504, rely=0, relwidth=0.496, relheight=0.09)
-        
+        self.graphskiy.place(relx=0.604, rely=0, relwidth=0.296, relheight=0.09)
+        self.input_search_l = ttk.Entry(
+            self.root_menu_5,
+            style="TEntry",
+            font=("Helvetica", 25),
+            foreground="#4D4D4D"
+        )
+        self.input_search_l.place(relx=0.9, rely=0, relwidth=0.1, relheight=0.09)
+        self.input_search_l.bind("<KeyRelease>", lambda e, b="Лицей": self.on_search_change(e, b))
+
+        self.search_buttons = {
+            "Графский": [],
+            "Лицей": []
+        }
+        self.all_rooms = {
+            "Графский": [],
+            "Лицей": []
+        }
+
         self.display_buttons("Графский")
         self.display_buttons("Лицей")
 
     def display_buttons(self, answer):
         self.answ = answer
         self.room_menu_5_con.execute("SELECT DISTINCT Number FROM rooms WHERE Graph_or_Lyceum = ?", (self.answ,))
-        rooms = self.room_menu_5_con.fetchall()
+        self.all_rooms[self.answ] = self.room_menu_5_con.fetchall()
 
         wid_x = 0.11  # уменьшаем ширину кнопки для 4 кабинетов
         hei_y = 0.1   # высота остается прежней
@@ -3246,7 +5424,7 @@ class menu_check_room:
             start_x = 0.52  # начальная позиция для Лицея
             positions = [0.52, 0.64, 0.76, 0.88]  # 4 позиции для кнопок
 
-        for i, room in enumerate(rooms):
+        for i, room in enumerate(self.all_rooms[self.answ]):
             pos_x = positions[i % 4]  # позиция по x (чередуем 4 позиции)
             pos_y = 0.1 + (i // 4) * 0.1  # позиция по y (новая строка каждые 4 кабинета)
 
@@ -3257,6 +5435,66 @@ class menu_check_room:
                 style = "Sec_5.TButton",
             )
             room_button.place(relx=pos_x, rely=pos_y, relwidth=wid_x, relheight=hei_y)
+
+    def on_search_change(self, event, building):
+        if building == "Графский":
+            self.input_search_l.delete(0, END)
+        else:
+            self.input_search_g.delete(0, END)
+
+        search_text = event.widget.get().strip()
+
+        # Очищаем старые кнопки поиска
+        for btn in self.search_buttons[building]:
+            btn.destroy()
+        self.search_buttons[building].clear()
+
+        if building == "Графский":
+            for widget in self.root_menu_5.winfo_children():
+                if widget.winfo_class() == "TButton":
+                    widget.destroy()
+            self.display_buttons("Лицей")
+        else:
+            for widget in self.root_menu_5.winfo_children():
+                if widget.winfo_class() == "TButton":
+                    widget.destroy()
+            self.display_buttons("Графский")
+        
+        if not search_text:
+            self.update_buttons()
+            return
+
+        
+        # Фильтруем кабинеты по введённому тексту (регистр игнорируется)
+        filtered_teachers = [
+            r for r in self.all_rooms.get(building, [])
+            if search_text.lower() in f"{r[0]}".lower()
+        ]
+        
+        # Если есть результаты, выводим кнопки ниже поля поиска
+        if filtered_teachers:
+            wid_x = 0.11  # уменьшаем ширину кнопки для 4 кабинетов
+            hei_y = 0.1   # высота остается прежней
+    
+            if building == "Графский":
+                positions = [0.02, 0.14, 0.26, 0.38]
+            else:
+                positions = [0.52, 0.64, 0.76, 0.88]
+
+            for i, room in enumerate(filtered_teachers):
+                pos_x = positions[i % 4]
+                pos_y = 0.1 + (i // 4) * 0.1
+
+                room_button = ttk.Button(
+                    self.root_menu_5,
+                    text=room[0],
+                    command=lambda num=room[0], ans=building: self.open_room_screen(num, ans),
+                    style="Sec_5.TButton",
+                )
+                room_button.place(relx=pos_x, rely=pos_y, relwidth=wid_x, relheight=hei_y)
+                self.search_buttons[building].append(room_button)
+
+
 
     def open_room_screen(self, room_number, answerr):
         room_info(self.root_menu_5, room_number, self.room_menu_5_base, self, answerr, self.root_menu_5)
@@ -3554,7 +5792,7 @@ class room_info:
         self.main_screen.update_buttons()
         self.root_room_info.destroy()
         warning = popup(self.root_parent, f"Кабинет {self.room_number} удален!", "Успех")
-        warning.root.mainloop()   
+        warning.root.mainloop()
 ###     
 
 
@@ -3606,7 +5844,7 @@ class menu_add_teacher:
             relief=FLAT,
             bd=1              
         )
-        separator_1.place(relx=0, rely=0.45, relwidth=0.5, relheight=0.007) #Горизонтальные
+        separator_1.place(relx=0, rely=0.45, relwidth=0.5, relheight=0.007) #Горизонтальные1
 
         separator_1 = Frame(
             self.root_menu_6, 
@@ -3616,6 +5854,15 @@ class menu_add_teacher:
             bd=1               
         )
         separator_1.place(relx=0.5, rely=0, relwidth= 0.004, relheight= 1) #Вертикальные
+
+        separator_3 = Frame(
+            self.root_menu_6, 
+            height=3,         
+            bg='grey',         
+            relief=FLAT,
+            bd=1              
+        )
+        separator_3.place(relx=0, rely=0.719, relwidth=0.5, relheight=0.007) #Горизонтальные2
     ###
 
     #Блок фамилии
@@ -3704,8 +5951,6 @@ class menu_add_teacher:
     ###
         
     #Блок исключений по урокам
-        self.num_les = ["0", "1", "2", "3", "4", "5", "6", "7", "8"]
-
         self.lessons = ttk.Label(
             self.root_menu_6,
             text="Не может:",
@@ -3714,40 +5959,14 @@ class menu_add_teacher:
         )
         self.lessons.place(relx=0.504, rely=0.225, relwidth=0.186, relheight=0.1125)
 
-        self.begin = ttk.Label(
+        self.begin = ttk.Entry(
             self.root_menu_6,
-            text="С",
-            style="TLabel",
+            style = "TEntry",
+            font=("Helvetica", 25),
+            foreground="#4D4D4D",
         )
-        self.begin.place(relx=0.7, rely=0.225, relwidth=0.04, relheight=0.1125)
-
-        self.input_begin = ttk.Combobox(
-            self.root_menu_6,
-            values=self.num_les,
-            style="TCombobox",
-            font=("Helvetica", 27),
-            state="readonly", 
-            foreground="#4D4D4D"
-        )
-        self.input_begin.place(relx=0.74, rely=0.225, relwidth=0.09, relheight=0.1125)
-
-        self.end = ttk.Label(
-            self.root_menu_6,
-            text="До",
-            style="TLabel",
-            anchor="center"
-        )
-        self.end.place(relx=0.83, rely=0.225, relwidth=0.08, relheight=0.1125)
-
-        self.input_end = ttk.Combobox(
-            self.root_menu_6,
-            values=self.num_les,
-            style="TCombobox",
-            font=("Helvetica", 27),
-            state="readonly", 
-            foreground="#4D4D4D"
-        )
-        self.input_end.place(relx=0.91, rely=0.225, relwidth=0.09, relheight=0.1125)
+        self.begin.place(relx=0.7, rely=0.225, relwidth=0.3, relheight=0.1125)
+        self.begin.insert(0, "1, 2, ... , n")
     ###
 
     #Кнопка добавить искючение
@@ -3760,45 +5979,73 @@ class menu_add_teacher:
         self.add_exce.place(relx=0.504, rely=0.3375, relwidth=0.496, relheight=0.1125)
     ###
 
-    #Блок выбора урока преподования
-        self.subjects = [
-            "Алгебра/Геометрия/ТеорВер",
-            "Физика",
-            "Русский/Литература",
-            "История",
-            "Информатика",
-            "География",
-            "Английский язык",
-            "Физра",
-            "Биология/Химия",
-            "Технология",
-            "Обществознание",
-            "ОБЖ"
-        ] #Существующие уроки
-
-        self.subjects_label = ttk.Label(
+    #Блок выбора жесткого перехода
+        options = ["Да", "Нет"]
+        self.stricttrans = ttk.Label(
             self.root_menu_6,
-            text = "Предмет",
+            text="1 урок переход:",
             style="TLabel",
             anchor="center"
         )
-        self.subjects_label.place(relx=0, rely=0.457, relwidth=0.5, relheight=0.09)
+        self.stricttrans.place(relx=0, rely=0.726, relwidth=0.3, relheight=0.138)
 
-        self.input_subjects = Listbox(
+        self.stricttrans_or_not = ttk.Combobox(
             self.root_menu_6,
-            selectmode=SINGLE,
-            background="#DCDCDC",
-            selectbackground="#4b6985", 
-            font=("Helvetica", 27), 
-            foreground="#4D4D4D", 
-            relief="groove",
-            bd=2
+            values= options,
+            style="TCombobox",
+            font=("Helvetica", 27),
+            state="readonly", 
+            foreground="#4D4D4D"
+              
         )
-        self.input_subjects.place(relx=0, rely=0.547, relwidth=0.5, relheight=0.303)
-
-        for item in self.subjects:
-            self.input_subjects.insert(END, item)
+        self.stricttrans_or_not.place(relx=0.3, rely=0.726, relwidth=0.2, relheight=0.138)
+        self.stricttrans_or_not.set("Да или нет")
     ###
+
+    #Кабинеты прио 
+
+    #Лицей
+        self.prio_l = ttk.Label(
+            self.root_menu_6,
+            text="Каб.лицей:",
+            style="TLabel",
+            anchor="center",
+            font=("Helvetica", 26),
+
+        )
+        
+        self.prio_l.place(relx=0, rely=0.457, relwidth=0.25, relheight=0.13)
+
+        self.input_prio_l = ttk.Entry(
+            self.root_menu_6,
+            style = "TEntry",
+            font=("Helvetica", 25),
+            foreground="#4D4D4D",
+            
+        )
+        self.input_prio_l.place(relx=0.25, rely=0.457, relwidth=0.25, relheight=0.13)
+        self.input_prio_l.insert(0, "Каб_1, ... , Каб_n")
+    #Графский
+        self.prio_g = ttk.Label(
+            self.root_menu_6,
+            text="Каб.графский:",
+            style="TLabel",
+            anchor="center",
+            font=("Helvetica", 26),
+
+        )
+        
+        self.prio_g.place(relx=0, rely=0.588, relwidth=0.25, relheight=0.13)
+
+        self.input_prio_g = ttk.Entry(
+            self.root_menu_6,
+            style = "TEntry",
+            font=("Helvetica", 25),
+            foreground="#4D4D4D"
+        )
+        self.input_prio_g.place(relx=0.25, rely=0.588, relwidth=0.25, relheight=0.13)
+        self.input_prio_g.insert(0, "Каб_1, ... , Каб_n")
+
 
     # Кнопка добавления учителя
         self.add_button = ttk.Button(
@@ -3815,8 +6062,7 @@ class menu_add_teacher:
     def exce_add(self):
     #Входные данные
         in_day = self.input_day.get()
-        in_beg = self.input_begin.get()
-        in_end = self.input_end.get()
+        exce_less = self.begin.get()
     ###
 
     #Проверка дня
@@ -3825,33 +6071,22 @@ class menu_add_teacher:
             warning.root.mainloop()
             return
     ###
+        char = ("1", "2", "3","4", "5","6","7", "8")
 
-    #Проверка начала исключения
-        if in_beg not in self.num_les:
-            warning = eror_popup(self.root_menu_6, "Ошибка в искл")
+        l_class = []
+        if exce_less == "":
+            warning = eror_popup(self.root_menu_6, "Не выбраны уроки искл.")
             warning.root.mainloop()
             return
-    ###
+        if exce_less != "1, 2, ... , n" or exce_less != "":
+            for l in exce_less.split(", "):
+                if l not in char or l in l_class:
+                    warning = eror_popup(self.root_menu_6, "Ошибке в искл. уроке")
+                    warning.root.mainloop()
+                    return
+                else:
+                    l_class.append(l)
 
-    #Проверка конца исключения
-        if in_beg not in self.num_les:
-            warning = eror_popup(self.root_menu_6, "Ошибка в искл")
-            warning.root.mainloop()
-            return
-    ###
-
-    #Проверка начал + конца исключения
-        if in_beg > in_end:
-            warning = eror_popup(self.root_menu_6, "Ошибка в искл")
-            warning.root.mainloop()
-            return
-    ###
-
-    #Проверка навчало не равно конец
-        if in_beg == in_end:
-            warning = eror_popup(self.root_menu_6, "Ошибка в искл")
-            warning.root.mainloop()
-            return
     #
 
     #Проверка на существование
@@ -3870,7 +6105,7 @@ class menu_add_teacher:
             return
     ###
 
-        self.data_exce.append([in_day, in_beg, in_end])
+        self.data_exce.append([in_day, exce_less])
         self.display_exce()
         warning = popup(self.root_menu_6, "Искл. добвлено, еще?", "Успех")
                                     
@@ -3903,7 +6138,7 @@ class menu_add_teacher:
 
     # При нажатии на кнопку исключения открывается окно редактирования/удаления
     def open_popup_exce(self, idx, ex):
-        popup_exce_1((idx, ex[0], ex[1], ex[2]), self)
+        popup_exce_1((idx, ex[0], ex[1]), self)
 
 ###
 
@@ -3913,10 +6148,15 @@ class menu_add_teacher:
         name = self.input_name.get()
         surname = self.input_surname.get()
         patrony = self.input_patrony.get()
-        ind_subject = self.input_subjects.curselection()
+        stricttr = self.stricttrans_or_not.get()
         data_teacher = []
         char = "абвгдеёжзийклмнопрстуфхцчшщъыьэюя"
+
+        prio_l = self.input_prio_l.get()
+        prio_g = self.input_prio_g.get()
     ###
+
+   
 
     #Проверка имени
         if name == "" or not all(i.lower() in char for i in name):
@@ -3945,18 +6185,19 @@ class menu_add_teacher:
             data_teacher.append(patrony)
     ###
 
-    #Проверка предмета 
-        if ind_subject == tuple():
-            warning = eror_popup(self.root_menu_6, "Ошибка в прио. предметах")
-            warning.root.mainloop()     
+     #Проверка 1 урок переход
+        if stricttr == "Да" or stricttr == "Нет":
+            data_teacher.append(stricttr)
+        else:                                       
+            warning = eror_popup(self.root_menu_6, "Не выбран переход")
+            warning.root.mainloop()
             return
-        else:
-            data_teacher.append(self.subjects[ind_subject[0]])
     ###
 
+
     #Проверка на предварительное наличие учителя 
-        self.con_menu_6.execute("SELECT * FROM teachers WHERE Surname = ? AND Name = ? AND Patrony = ? AND Lesson = ?",
-                            (data_teacher[1], data_teacher[0], data_teacher[2], data_teacher[3]))
+        self.con_menu_6.execute("SELECT * FROM teachers WHERE Surname = ? AND Name = ? AND Patrony = ?",
+                            (data_teacher[1], data_teacher[0], data_teacher[2]))
         values = self.con_menu_6.fetchall()  
         if values:
             warning = eror_popup(self.root_menu_6, "Уже есть такой учитель")
@@ -3964,23 +6205,88 @@ class menu_add_teacher:
             return
     ###
 
+        
+
+    #Проверка прио кабинетов + вставка в таблицу
+        self.con_menu_6.execute("""SELECT * FROM rooms""")
+        values = self.con_menu_6.fetchall()
+
+        real_rooms= {
+            "Лицей":[],
+            "Графский":[]
+        }
+
+        for v in values:
+            real_rooms[v[2]].append(str(v[1]))
+
+
+        if prio_l != "" and prio_l != "Каб_1, ... , Каб_n":
+            list_rooms = prio_l.split(", ")
+            container_l_1 = []
+            for r in list_rooms:
+                if r not in real_rooms["Лицей"]:
+                    container_l_1.append(r)
+
+                if len(container_l_1) != 0:
+                        warning = eror_popup(self.root_menu_6, f"Не сущ. {"".join(container_l_1)}")
+                        warning.root.mainloop()
+                        return
+
+        
+        if prio_g != "" and prio_g != "Каб_1, ... , Каб_n":
+            list_rooms = prio_g.split(", ")
+            container_l_2 = []
+            for r in list_rooms:
+                if r not in real_rooms["Графский"]:
+                    container_l_2.append(r)
+                if len(container_l_2) != 0:
+                        warning = eror_popup(self.root_menu_6, f"Не сущ. {"".join(container_l_2)}")
+                        warning.root.mainloop()
+                        return
+                
+
     #Вставка данных в таблицу teachers
-        self.con_menu_6.execute("INSERT INTO teachers (Surname, Name, Patrony, Lesson) VALUES (?, ?, ?, ?)",
+            
+        self.con_menu_6.execute("INSERT INTO teachers (Surname, Name, Patrony, Trans) VALUES (?, ?, ?, ?)",
                                 (data_teacher[1], data_teacher[0], data_teacher[2], data_teacher[3]))
         self.base_menu_6.commit()
+
+        self.con_menu_6.execute("SELECT id FROM teachers WHERE Surname = ? AND Name = ? AND Patrony = ? AND Trans = ?",
+                            (data_teacher[1], data_teacher[0], data_teacher[2], data_teacher[3]))
+        
+        teacher_id = self.con_menu_6.fetchone()#Нахождение индекса
     ###
 
-    #Вставка данных в таблицу исключений
-        self.con_menu_6.execute("SELECT id FROM teachers WHERE Surname = ? AND Name = ? AND Patrony = ? AND Lesson = ?",
-                                (data_teacher[1], data_teacher[0], data_teacher[2], data_teacher[3]))
-        teacher_id = self.con_menu_6.fetchone()#Нахождение индекса
 
+        if prio_l != "" and prio_l != "Каб_1, ... , Каб_n":
+            list_rooms = prio_l.split(", ")
+            container_l_1 = []
+            for r in list_rooms:
+                if r not in real_rooms["Лицей"]:
+                    container_l_1.append(r)
+                self.con_menu_6.execute("INSERT INTO prio (Rel, Rooms, Building) VALUES (?, ?, ?)",
+                                (teacher_id[0], prio_l, "Лицей"))
+                self.base_menu_6.commit()
+        
+        if prio_g != "" and prio_g != "Каб_1, ... , Каб_n":
+            list_rooms = prio_g.split(", ")
+            container_l_2 = []
+            for r in list_rooms:
+                if r not in real_rooms["Графский"]:
+                    container_l_2.append(r)
+                self.con_menu_6.execute("INSERT INTO prio (Rel, Rooms, Building) VALUES (?, ?, ?)",
+                                (teacher_id[0], prio_g, "Графский"))
+                self.base_menu_6.commit()
+
+
+    #Вставка данных в таблицу исключений
+        
         if teacher_id:
             teacher_id = teacher_id[0]
             
             for i in self.data_exce:
-                self.con_menu_6.execute("INSERT INTO exceptions (Rel, Day, Begining, Ending) VALUES (?, ?, ?, ?)",
-                                        (teacher_id, i[0], i[1], i[2]))# Вставка исключений в таблицу exceptions
+                self.con_menu_6.execute("INSERT INTO exceptions (Rel, Day, Lessons) VALUES (?, ?, ?)",
+                                        (teacher_id, i[0], i[1]))# Вставка исключений в таблицу exceptions
                 self.base_menu_6.commit()  
 
         else:
@@ -3989,10 +6295,11 @@ class menu_add_teacher:
             return
     ###
 
+    
+        
         warning = popup(self.root_menu_6, "Учитель добавлен!", "Успех")
         self.data_exce = list()
         self.reset_form()
-
 ###
 
 #Сброс полей 
@@ -4001,10 +6308,14 @@ class menu_add_teacher:
         self.input_name.delete(0, END)
         self.input_patrony.delete(0, END)
         self.input_day.set('')
-        self.input_begin.set('')
-        self.input_end.set('')
-        self.input_subjects.selection_clear(0, END)
+        self.begin.delete(0, END)
+        self.begin.insert(0, "1, 2, ... , n")
         self.data_exce.clear()
+        self.input_prio_g.delete(0, END)
+        self.input_prio_g.insert(0, "Каб_1, ... , Каб_n")
+        self.input_prio_l.delete(0, END)
+        self.input_prio_l.insert(0, "Каб_1, ... , Каб_n")
+        self.stricttrans_or_not.set("Да или нет")
         for btn in self.exce_buttons:
             btn.destroy()
         self.exce_buttons.clear()
@@ -4016,7 +6327,7 @@ class menu_add_teacher:
 class popup_exce_1:
     def __init__(self, data, parent_menu):
     #Данные корня
-        self.idx, self.day_val, self.beg_val, self.end_val = data
+        self.idx, self.day_val, self.val = data
         self.parent_menu = parent_menu
         self.root_exce = Toplevel(parent_menu.root_menu_6)
         self.root_exce.title("Изменить исключение")
@@ -4071,7 +6382,6 @@ class popup_exce_1:
         self.input_day.set(self.day_val)  # Задаем изначальное значение
 
         # Блок исключений по урокам
-        self.num_les = ["0", "1", "2", "3", "4", "5", "6", "7", "8"]
 
         self.lessons = ttk.Label(
             self.root_exce,
@@ -4080,50 +6390,21 @@ class popup_exce_1:
         )
         self.lessons.place(relx=0, rely=0.5, relwidth=0.38, relheight=0.25)
 
-        self.begin = ttk.Label(
+        self.begin = ttk.Entry(
             self.root_exce,
-            text="С",
-            style="TLabel",
-            anchor= "center"
+            style = "TEntry",
+            font=("Helvetica", 25),
+            foreground="#4D4D4D",
         )
-        self.begin.place(relx=0.39, rely=0.5, relwidth=0.09, relheight=0.25)
-
-        self.input_begin = ttk.Combobox(
-            self.root_exce,
-            values=self.num_les,
-            style="TCombobox",
-            font=("Helvetica", 27),
-            state="readonly", 
-            foreground="#4D4D4D"
-        )
-        self.input_begin.place(relx=0.48, rely=0.5, relwidth=0.18, relheight=0.25)
-        self.input_begin.set(self.beg_val)  # Задаем изначальное значение
-
-        self.end = ttk.Label(
-            self.root_exce,
-            text="До",
-            style="TLabel",
-            anchor= "center"
-        )
-        self.end.place(relx=0.66, rely=0.5, relwidth=0.16, relheight=0.25)
-
-        self.input_end = ttk.Combobox(
-            self.root_exce,
-            values=self.num_les,
-            style="TCombobox",
-            font=("Helvetica", 27),
-            state="readonly", 
-            foreground="#4D4D4D"
-        )
-        self.input_end.place(relx=0.82, rely=0.5, relwidth=0.18, relheight=0.25)
-        self.input_end.set(self.end_val)  # Задаем изначальное значение
+        self.begin.place(relx=0.38, rely=0.5, relwidth=0.62, relheight=0.25)
+        self.begin.insert(0, self.val)
 
         # Футер (кнопки)
         self.save_button = ttk.Button(
             self.root_exce,
             text="Сохранить",
             style="Main.TButton",
-            command=self.save_data  # Добавьте обработчик, если понадобится
+            command=self.save_data  
         )
         self.save_button.place(relx=0, rely=0.75, relwidth=0.3, relheight=0.25)
 
@@ -4158,8 +6439,7 @@ class popup_exce_1:
     #Метод сохранения изменений в исключении
     def save_data(self):
         new_day = self.input_day.get()
-        new_beg = self.input_begin.get()
-        new_end = self.input_end.get()
+        new_val = self.begin.get()
         
         # Проверка дня
         if new_day not in self.day_opt:
@@ -4167,23 +6447,21 @@ class popup_exce_1:
             warning.root.mainloop()
             return
         
-        # Проверка уроков
-        if new_beg not in self.num_les or new_end not in self.num_les:
-            warning = eror_popup(self.root_exce, "Ошибка в искл")
+        # Проверка cлотов
+        char = ("1", "2", "3", "4", "5", "6", "7", "8")
+        l_class = []
+        if new_val == "":
+            warning = eror_popup(self.root_menu_6, "Не выбраны уроки искл.")
             warning.root.mainloop()
             return
-        
-        # Проверка последовательности уроков (начало не больше конца)
-        if new_beg > new_end:
-            warning = eror_popup(self.root_exce, "Ошибка в искл")
-            warning.root.mainloop()
-            return
-        
-        #Проверка навчало не равно конец
-        if new_beg == new_end:
-            warning = eror_popup(self.root_menu_6, "Ошибка в искл")
-            warning.root.mainloop()
-            return
+        if new_val != "1, 2, ... , n" or new_val != "":
+            for l in new_val.split(", "):
+                if l not in char or l in l_class:
+                    warning = eror_popup(self.root_menu_6, "Ошибке в искл. уроке")
+                    warning.root.mainloop()
+                    return
+                else:
+                    l_class.append(l)
         #
         
         # Новая проверка: если уже существует другое исключение с таким днем
@@ -4194,7 +6472,7 @@ class popup_exce_1:
                 return
 
         # Обновляем значение исключения в родительском окне
-        self.parent_menu.data_exce[self.idx] = [new_day, new_beg, new_end]
+        self.parent_menu.data_exce[self.idx] = [new_day, new_val]
         self.parent_menu.update_exce()
         popup(self.parent_menu.root_menu_6, "Искл. обновлено!", "Успех").root.mainloop()
         self.root_exce.destroy()
@@ -4242,19 +6520,31 @@ class menu_check_teacher:
             style="TLabel",
             anchor="center"
         )
-        self.teacher_label.place(relx=0, rely=0, relwidth=1, relheight=0.1)
+        self.teacher_label.place(relx=0.2, rely=0, relwidth=0.6, relheight=0.1)
 
+    #Поисковик
+        self.input_search = ttk.Entry(
+            self.root_menu_7,
+            style="TEntry",
+            font=("Helvetica", 25),
+            foreground="#4D4D4D"
+        )
+        self.input_search.place(relx=0.7, rely=0, relwidth=0.25, relheight=0.1)
+        self.input_search.bind("<KeyRelease>", self.on_search_change)
+    #
+    
+        self.search_buttons = []  # Список для хранения кнопок поиска
+        self.all_teachers = []    # Список всех учителей
         self.display_buttons()
 
-    #Функционал
     def display_buttons(self):
         self.teacher_menu_7_con.execute("SELECT DISTINCT Surname, Name, Patrony FROM teachers")
-        teachers = self.teacher_menu_7_con.fetchall()
+        self.all_teachers = self.teacher_menu_7_con.fetchall()
 
         wid_x = 0.16  # ширина кнопки (4 кнопки + отступы)
         hei_y = 0.08  # высота кнопки
 
-        for i, teacher in enumerate(teachers):
+        for i, teacher in enumerate(self.all_teachers):
             pos_x = (i % 6) * 0.16 + 0.01  # позиция по x (6 колонки)
             pos_y = (i // 6) * 0.09 + 0.1   # позиция по y (10 строк)
 
@@ -4265,6 +6555,50 @@ class menu_check_teacher:
                 style = "Sec_7.TButton"
             )
             teacher_button.place(relx=pos_x, rely=pos_y, relwidth=wid_x, relheight=hei_y)
+    
+    def on_search_change(self, event):
+        """Обработчик изменения текста в поле поиска"""
+        search_text = self.input_search.get()
+
+        # Очищаем старые кнопки поиска
+        for btn in self.search_buttons:
+            btn.destroy()
+        self.search_buttons.clear()
+
+
+        for widget in self.root_menu_7.winfo_children():
+            if widget.winfo_class() == "TButton":
+                widget.destroy()
+        
+        if not search_text:
+            self.update_buttons()
+            return
+
+        
+        
+        # Фильтруем учителей по введённому тексту
+        filtered_teachers = [
+            teacher for teacher in self.all_teachers
+            if search_text in f"{teacher[0]} {teacher[1]} {teacher[2]}"
+        ]
+        
+        # Если есть результаты, выводим кнопки ниже поля поиска
+        if filtered_teachers:
+            for i, teacher in enumerate(filtered_teachers):
+                pos_x = (i % 6) * 0.16 + 0.01  # позиция по x (6 колонки)
+                pos_y = (i // 6) * 0.09 + 0.1   # позиция по y (10 строк)
+                wid_x = 0.16  # ширина кнопки (4 кнопки + отступы)
+                hei_y = 0.08  # высота кнопки
+
+
+                teacher_button = ttk.Button(
+                    self.root_menu_7,
+                    text=f"{teacher[0]} {teacher[1][0]}. {teacher[2][0]}.",
+                    command=lambda t=teacher: self.open_teacher_screen(t),
+                    style = "Sec_7.TButton"
+                )
+                teacher_button.place(relx=pos_x, rely=pos_y, relwidth=wid_x, relheight=hei_y)
+                self.search_buttons.append(teacher_button)
 
     def open_teacher_screen(self, teacher):
         teacher_info(self.root_menu_7, teacher, self.teacher_menu_7_base, self, self.root_menu_7)
@@ -4318,19 +6652,32 @@ class teacher_info:
         self.def_surname = full_data[0][1]
         self.def_name = full_data[0][2]
         self.def_patrony = full_data[0][3]
-        self.def_lesson = full_data[0][4]
+        self.def_trans = full_data[0][4]
         self.teacher_id = full_data[0][0]
 
         # Загрузка исключений из БД для данного учителя по полю Rel
         self.data_exce = []  # локальный список исключений
         self.exce_buttons = []  # список кнопок для отображения исключений
         self.con_teacher_info.execute(
-            "SELECT Day, Begining, Ending FROM exceptions WHERE Rel = ?",
+            "SELECT Day, Lessons FROM exceptions WHERE Rel = ?",
             (self.teacher_id,)
         )
         exceptions = self.con_teacher_info.fetchall()
         for exc in exceptions:
             self.data_exce.append(list(exc))  # приводим к списку для единообразия
+        
+        self.con_teacher_info.execute(
+            "SELECT * FROM prio WHERE Rel = ? AND Building = ?",
+            (self.teacher_id, "Лицей")
+        )
+
+        self.data_l = self.con_teacher_info.fetchall()
+
+        self.con_teacher_info.execute(
+            "SELECT * FROM prio WHERE Rel = ? AND Building = ?" ,
+            (self.teacher_id, "Графский")
+        )
+        self.data_g = self.con_teacher_info.fetchall()
 
     #Виджеты инфы учителя
         # Границы (аналогично menu_add_teacher)
@@ -4351,6 +6698,16 @@ class teacher_info:
             bd=1
         )
         separator_2.place(relx=0.5, rely=0, relwidth=0.004, relheight=1)
+
+        separator_3 = Frame(
+            self.root_teacher_info, 
+            height=3,         
+            bg='grey',         
+            relief=FLAT,
+            bd=1              
+        )
+        separator_3.place(relx=0, rely=0.719, relwidth=0.5, relheight=0.007) #Горизонтальные2
+        
 
         # Блок Фамилия
         self.surname = ttk.Label(
@@ -4406,46 +6763,28 @@ class teacher_info:
         self.input_patrony.place(relx=0.1, rely=0.3, relwidth=0.4, relheight=0.15)
         self.input_patrony.insert(0, self.def_patrony)
 
-        # Блок выбора предмета преподования
-        self.subjects = [
-            "Алгебра/Геометрия/ТеорВер",
-            "Физика",
-            "Русский/Литература",
-            "История",
-            "Информатика",
-            "География",
-            "Английский язык",
-            "Физра",
-            "Биология/Химия",
-            "Технология",
-            "Обществознание",
-            "ОБЖ"
-        ]
-        self.subjects_label = ttk.Label(
+    #Блок жесткого перехода
+        options = ["Да", "Нет"]
+        self.stricttrans = ttk.Label(
             self.root_teacher_info,
-            text="Предмет",
+            text="1 урок переход:",
             style="TLabel",
             anchor="center"
         )
-        self.subjects_label.place(relx=0, rely=0.457, relwidth=0.5, relheight=0.09)
+        self.stricttrans.place(relx=0, rely=0.726, relwidth=0.3, relheight=0.138)
 
-        self.input_subjects = Listbox(
+        self.stricttrans_or_not = ttk.Combobox(
             self.root_teacher_info,
-            selectmode=SINGLE,
-            background="#DCDCDC",
-            selectbackground="#4b6985", 
-            font=("Helvetica", 27), 
-            foreground="#4D4D4D", 
-            relief="groove",
-            bd=2)
-        
-        self.input_subjects.place(relx=0, rely=0.547, relwidth=0.5, relheight=0.303)
-        for item in self.subjects:
-            self.input_subjects.insert(END, item)
-        for i, subj in enumerate(self.subjects):
-            if subj == self.def_lesson:
-                self.input_subjects.select_set(i)
-                break
+            values= options,
+            style="TCombobox",
+            font=("Helvetica", 27),
+            state="readonly", 
+            foreground="#4D4D4D"
+              
+        )
+        self.stricttrans_or_not.place(relx=0.3, rely=0.726, relwidth=0.2, relheight=0.138)
+        self.stricttrans_or_not.set(self.def_trans)
+        ###
 
         # Блок исключений (заголовок)
         self.exce = ttk.Label(
@@ -4486,41 +6825,70 @@ class teacher_info:
         )
         self.lessons.place(relx=0.504, rely=0.225, relwidth=0.186, relheight=0.1125)
 
-        self.begin = ttk.Label(
+        self.lessons = ttk.Entry(
             self.root_teacher_info,
-            text="С",
-            style="TLabel",
-            anchor="center"
+            style = "TEntry",
+            font=("Helvetica", 25),
+            foreground="#4D4D4D",
         )
-        self.begin.place(relx=0.69, rely=0.225, relwidth=0.05, relheight=0.1125)
+        self.lessons.place(relx=0.7, rely=0.225, relwidth=0.3, relheight=0.1125)
+        self.lessons.insert(0, "1, 2, ... , n")
 
-        self.input_begin = ttk.Combobox(
+    #Кабинеты прио 
+
+    #Лицей
+        self.prio_l = ttk.Label(
             self.root_teacher_info,
-            values=self.num_les,
-            style="TCombobox",
-            font=("Helvetica", 27),
-            state="readonly", 
+            text="Каб.лицей:",
+            style="TLabel",
+            anchor="center",
+            font=("Helvetica", 26),
+
+        )
+        
+        self.prio_l.place(relx=0, rely=0.457, relwidth=0.25, relheight=0.13)
+
+        self.input_prio_l = ttk.Entry(
+            self.root_teacher_info,
+            style = "TEntry",
+            font=("Helvetica", 25),
+            foreground="#4D4D4D",
+            
+        )
+        self.input_prio_l.place(relx=0.25, rely=0.457, relwidth=0.25, relheight=0.13)
+        if self.data_l:
+            self.input_prio_l.insert(0, self.data_l[0][2])
+            self.data_l = self.data_l[0][2]
+        else:
+            self.input_prio_l.insert(0, "Каб_1, ... , Каб_n")
+            self.data_l = "Каб_1, ... , Каб_n"
+    #Графский
+        self.prio_g = ttk.Label(
+            self.root_teacher_info,
+            text="Каб.графский:",
+            style="TLabel",
+            anchor="center",
+            font=("Helvetica", 26),
+
+        )
+        
+        self.prio_g.place(relx=0, rely=0.588, relwidth=0.25, relheight=0.13)
+
+        self.input_prio_g = ttk.Entry(
+            self.root_teacher_info,
+            style = "TEntry",
+            font=("Helvetica", 25),
             foreground="#4D4D4D"
         )
-        self.input_begin.place(relx=0.74, rely=0.225, relwidth=0.09, relheight=0.1125)
+        self.input_prio_g.place(relx=0.25, rely=0.588, relwidth=0.25, relheight=0.13)
+        if self.data_g: 
+            self.input_prio_g.insert(0, self.data_g[0][2])
+            self.data_g = self.data_g[0][2]
+        else:
+            self.input_prio_g.insert(0, "Каб_1, ... , Каб_n")
+            self.data_g = "Каб_1, ... , Каб_n"
 
-        self.end = ttk.Label(
-            self.root_teacher_info,
-            text="До",
-            style="TLabel",
-            anchor="center"
-        )
-        self.end.place(relx=0.83, rely=0.225, relwidth=0.08, relheight=0.1125)
-
-        self.input_end = ttk.Combobox(
-            self.root_teacher_info,
-            values=self.num_les,
-            style="TCombobox",
-            font=("Helvetica", 27),
-            state="readonly", 
-            foreground="#4D4D4D"
-        )
-        self.input_end.place(relx=0.91, rely=0.225, relwidth=0.09, relheight=0.1125)
+    ###
 
         # Кнопка добавления исключения
         self.add_exce = ttk.Button(
@@ -4550,7 +6918,7 @@ class teacher_info:
 
         self.cancel_button = ttk.Button(
             self.root_teacher_info,
-            text="Доп инфа",
+            text="Занятость",
             style="Main_7_0.TButton",
             command=self.open_extra_info
         )
@@ -4574,38 +6942,29 @@ class teacher_info:
     def exce_add(self):
         # Входные данные
         in_day = self.input_day.get()
-        in_beg = self.input_begin.get()
-        in_end = self.input_end.get()
-        
+        in_val = self.lessons.get()
+
         # Проверка дня
         if in_day not in self.day_opt:
             warning = eror_popup(self.root_teacher_info, "Ошибка в дне искл")
             warning.root.mainloop()
             return
         
-        # Проверка начальных значений уроков
-        if in_beg not in self.num_les:
-            warning = eror_popup(self.root_teacher_info, "Ошибка в искл")
+        char = ("1", "2", "3","4", "5","6","7", "8")
+
+        l_class = []
+        if in_val == "":
+            warning = eror_popup(self.root_teacher_info, "Не выбраны уроки искл.")
             warning.root.mainloop()
             return
-        
-        if in_end not in self.num_les:
-            warning = eror_popup(self.root_teacher_info, "Ошибка в искл")
-            warning.root.mainloop()
-            return
-        
-        # Проверка последовательности (начало не больше конца)
-        if in_beg > in_end:
-            warning = eror_popup(self.root_teacher_info, "Ошибка в искл")
-            warning.root.mainloop()
-            return
-        
-        #Проверка навчало не равно конец
-        if in_beg == in_end:
-            warning = eror_popup(self.root_teacher_info, "Ошибка в искл")
-            warning.root.mainloop()
-            return
-        #
+        if in_val != "1, 2, ... , n" or in_val != "":
+            for l in in_val.split(", "):
+                if l not in char or l in l_class:
+                    warning = eror_popup(self.root_teacher_info, "Ошибке в искл. уроке")
+                    warning.root.mainloop()
+                    return
+                else:
+                    l_class.append(l)
 
         # Проверка наличия исключения для уже заданного дня
         for exc in self.data_exce:
@@ -4621,10 +6980,10 @@ class teacher_info:
 
         
 
-        self.data_exce.append([in_day, in_beg, in_end])
+        self.data_exce.append([in_day, in_val])
         self.con_teacher_info.execute(
-            """INSERT INTO exceptions (Rel, Day, Begining, Ending) VALUES (?, ?, ?, ?)""",
-            (self.teacher_id, in_day, in_beg, in_end, )
+            """INSERT INTO exceptions (Rel, Day, Lessons) VALUES (?, ?, ?)""",
+            (self.teacher_id, in_day, in_val)
         )
         self.base_teacher_info.commit()
         self.display_exce()
@@ -4654,7 +7013,7 @@ class teacher_info:
         self.display_exce()
 
     def open_popup_exce(self, idx, exc):
-        popup_exce_2((idx, exc[0], exc[1], exc[2]), self)
+        popup_exce_2((idx, exc[0], exc[1]), self)
 
     def save_data(self):
         # Пример сохранения данных учителя (реализация уже присутствует)
@@ -4662,14 +7021,13 @@ class teacher_info:
         input_surname = self.input_surname.get()
         input_name = self.input_name.get()
         input_patrony = self.input_patrony.get()
-        selected_indices = self.input_subjects.curselection()
-        if not selected_indices:
-            warning = eror_popup(self.root_teacher_info, "Ошибка в предмете")
-            warning.root.mainloop()
-            return
-        input_subject = self.subjects[selected_indices[0]]
+        input_trans = self.stricttrans_or_not.get()
+        input_prio_l = self.input_prio_l.get()
+        input_prio_g = self.input_prio_g.get()
         if (input_surname == self.def_surname and input_name == self.def_name and 
-            input_patrony == self.def_patrony and input_subject == self.def_lesson):
+            input_patrony == self.def_patrony and input_trans == self.def_trans and 
+            (input_prio_g == self.data_g or (input_prio_g == "" and self.data_g == "Каб_1, ... , Каб_n")) and
+            (input_prio_l == self.data_l or (input_prio_l == "" and self.data_l == "Каб_1, ... , Каб_n"))):
             warning = eror_popup(self.root_teacher_info, "Вы ничего не поменяли")
             warning.root.mainloop()
             return
@@ -4692,21 +7050,95 @@ class teacher_info:
             return
         else:
             data_teacher.append(input_patrony)
-        if input_subject not in self.subjects:
-            warning = eror_popup(self.root_teacher_info, "Ошибка в предмете")
-            warning.root.mainloop()
-            return
-        else:
-            data_teacher.append(input_subject)
+
+
+
+        real_rooms= {
+            "Лицей":[],
+            "Графский":[]
+        }
+
+
+        self.con_teacher_info.execute("""SELECT * FROM rooms""")
+        values = self.con_teacher_info.fetchall()
+    ###
+        for v in values:
+            real_rooms[v[2]].append(str(v[1]))
+
+        if input_prio_l != "" and input_prio_l != "Каб_1, ... , Каб_n":
+            list_rooms = input_prio_l.split(", ")
+            container_l_1 = []
+            for r in list_rooms:
+                if r not in real_rooms["Лицей"]:
+                    container_l_1.append(r)
+
+                if len(container_l_1) != 0:
+                        warning = eror_popup(self.root_teacher_info, f"Не сущ. {"".join(container_l_1)}")
+                        warning.root.mainloop()
+                        return
+
+        
+        if input_prio_g != "" and input_prio_g != "Каб_1, ... , Каб_n":
+            list_rooms = input_prio_g.split(", ")
+            container_l_2 = []
+            for r in list_rooms:
+                if r not in real_rooms["Графский"]:
+                    container_l_2.append(r)
+                if len(container_l_2) != 0:
+                        warning = eror_popup(self.root_teacher_info, f"Не сущ. {"".join(container_l_2)}")
+                        warning.root.mainloop()
+                        return
+        #  input_prio_g == self.data_g and  input_prio_l == self.data_l
+
+        if input_prio_g != self.data_g:
+            if input_prio_g == "" or input_prio_g ==  "Каб_1, ... , Каб_n":
+                self.con_teacher_info.execute("DELETE FROM prio WHERE Rel = ? and Rooms = ? and Building = ?", (self.teacher_id, self.data_g, "Графский"))
+                self.base_teacher_info.commit()
+            else:
+                self.con_teacher_info.execute(
+                "UPDATE prio SET Rooms = ? WHERE Building = ? and Rel = ?", (input_prio_g, "Графский", self.teacher_id))
+                self.base_teacher_info.commit()
+
+            if self.data_g == "Каб_1, ... , Каб_n" and (input_prio_g != "" or input_prio_g != "Каб_1, ... , Каб_n") and self.data_g != input_prio_g:
+                self.con_teacher_info.execute(
+                """INSERT INTO prio (Rel, Rooms, Building) VALUES (?, ?, ?)""", (self.teacher_id, input_prio_g, "Графский"))
+                self.base_teacher_info.commit()
+        
+
+        if input_prio_l != self.data_l:
+            if input_prio_l == "" or input_prio_l == "Каб_1, ... , Каб_n":
+                self.con_teacher_info.execute("DELETE FROM prio WHERE Rel = ? and Rooms = ? and Building = ?", (self.teacher_id, self.data_l, "Лицей"))
+                self.base_teacher_info.commit()
+            else:
+                self.con_teacher_info.execute(
+                "UPDATE prio SET Rooms = ? WHERE Building = ? and Rel == ?", (input_prio_l,"Лицей", self.teacher_id))
+                self.base_teacher_info.commit()
+
+            if self.data_l == "Каб_1, ... , Каб_n" and (input_prio_l != "" and input_prio_l != "Каб_1, ... , Каб_n"):
+                self.con_teacher_info.execute(
+                """INSERT INTO prio (Rel, Rooms, Building) VALUES (?, ?, ?)""", (self.teacher_id, input_prio_l, "Лицей"))
+                self.base_teacher_info.commit()
+        
+        
+        
+        
+        data_teacher.append(input_trans)
         self.con_teacher_info.execute(
-            "UPDATE teachers SET Surname = ?, Name = ?, Patrony = ?, Lesson = ? WHERE id = ?",
+            "UPDATE teachers SET Surname = ?, Name = ?, Patrony = ?, Trans = ? WHERE id = ?",
             (data_teacher[0], data_teacher[1], data_teacher[2], data_teacher[3], self.teacher_id)
         )
         self.base_teacher_info.commit()
+        self.data_g = input_prio_g
+        self.data_l = input_prio_l
         self.main_screen.update_buttons()
         popup(self.root_teacher_info, "Учитель обновлён!", "Успех").root.mainloop()
-        
+
     def delete_data(self):
+
+        # Удаляем учителя из таблицы teachers
+        self.con_teacher_info.execute("DELETE FROM prio WHERE Rel = ?", (self.teacher_id,))
+        self.base_teacher_info.commit()
+
         # Удаляем учителя из таблицы teachers
         self.con_teacher_info.execute("DELETE FROM teachers WHERE id = ?", (self.teacher_id,))
         self.base_teacher_info.commit()
@@ -4718,16 +7150,25 @@ class teacher_info:
         # Удаление всех уроков с таким учителем
         self.con_teacher_info.execute("DELETE FROM lessons WHERE Id_teacher = ?", (self.teacher_id,))
         self.base_teacher_info.commit()
+        
+        # Удаление физры (pe) с таким учителем
+        teacher_fio = f"{self.def_surname} {self.def_name[0]}. {self.def_patrony[0]}."
+        self.con_teacher_info.execute("DELETE FROM pe WHERE Teacher = ?", (teacher_fio,))
+        self.base_teacher_info.commit()
+        
+        # Удаление внеурочки (extra) с таким учителем
+        self.con_teacher_info.execute("DELETE FROM extra WHERE Teacher = ?", (teacher_fio,))
+        self.base_teacher_info.commit()
 
         self.main_screen.update_buttons()
         self.root_teacher_info.destroy()
-        popup(self.root_parent, "Учитель c искл и уркоами удалены!", "Успех").root.mainloop()
+        popup(self.root_parent, "Учитель удален!", "Успех").root.mainloop()
 
 #<Окно изм искл> - 0.2 +++
 class popup_exce_2:
     def __init__(self, data, parent_menu):
         #Данные корня
-        self.idx, self.day_val, self.beg_val, self.end_val = data
+        self.idx, self.day_val, self.val = data
         self.parent_menu = parent_menu
         self.root_exce = Toplevel(parent_menu.root_teacher_info)
         self.root_exce.title("Изменить исключение")
@@ -4789,43 +7230,14 @@ class popup_exce_2:
         )
         self.lessons.place(relx=0, rely=0.5, relwidth=0.38, relheight=0.25)
 
-        self.begin = ttk.Label(
+        self.begin = ttk.Entry(
             self.root_exce,
-            text="С",
-            style="TLabel",
-            anchor= "center"
+            style = "TEntry",
+            font=("Helvetica", 25),
+            foreground="#4D4D4D",
         )
-        self.begin.place(relx=0.39, rely=0.5, relwidth=0.09, relheight=0.25)
-
-        self.input_begin = ttk.Combobox(
-            self.root_exce,
-            values=self.num_les,
-            style="TCombobox",
-            font=("Helvetica", 27),
-            state="readonly", 
-            foreground="#4D4D4D"
-        )
-        self.input_begin.place(relx=0.48, rely=0.5, relwidth=0.18, relheight=0.25)
-        self.input_begin.set(self.beg_val)  # устанавливаем предустановленное значение
-
-        self.end = ttk.Label(
-            self.root_exce,
-            text="До",
-            style="TLabel",
-            anchor= "center"
-        )
-        self.end.place(relx=0.66, rely=0.5, relwidth=0.16, relheight=0.25)
-
-        self.input_end = ttk.Combobox(
-            self.root_exce,
-            values=self.num_les,
-            style="TCombobox",
-            font=("Helvetica", 27),
-            state="readonly", 
-            foreground="#4D4D4D"
-        )
-        self.input_end.place(relx=0.82, rely=0.5, relwidth=0.18, relheight=0.25)
-        self.input_end.set(self.end_val)  # устанавливаем предустановленное значение
+        self.begin.place(relx=0.38, rely=0.5, relwidth=0.62, relheight=0.25)
+        self.begin.insert(0, self.val)
 
         # Футер (кнопки "Сохранить", "Отмена", "Удалить")
         self.save_button = ttk.Button(
@@ -4856,8 +7268,8 @@ class popup_exce_2:
     def delete_data(self):
         # Удаляем запись из базы данных (если существует)
         self.parent_menu.con_teacher_info.execute(
-            "DELETE FROM exceptions WHERE Rel = ? AND Day = ? AND Begining = ? AND Ending = ?",
-            (self.parent_menu.teacher_id, self.day_val, self.beg_val, self.end_val)
+            "DELETE FROM exceptions WHERE Rel = ? AND Day = ? AND Lessons = ?",
+            (self.parent_menu.teacher_id, self.day_val, self.val)
         )
         self.parent_menu.base_teacher_info.commit()
         
@@ -4870,29 +7282,29 @@ class popup_exce_2:
 
     def save_data(self):
         new_day = self.input_day.get()
-        new_beg = self.input_begin.get()
-        new_end = self.input_end.get()
+        new_val = self.begin.get()
 
         if new_day not in self.day_opt:
             warning = eror_popup(self.root_exce, "Ошибка в дне искл")
             warning.root.mainloop()
             return
 
-        if new_beg not in self.num_les or new_end not in self.num_les:
-            warning = eror_popup(self.root_exce, "Ошибка в искл")
-            warning.root.mainloop()
-            return
 
-        if new_beg > new_end:
-            warning = eror_popup(self.root_exce, "Ошибка в искл")
-            warning.root.mainloop()
-            return
+        char = ("1", "2", "3","4", "5","6","7", "8")
 
-        #Проверка навчало не равно конец
-        if new_beg == new_end:
-            warning = eror_popup(self.root_menu_6, "Ошибка в искл")
+        l_class = []
+        if new_val == "":
+            warning = eror_popup(self.root_exce, "Не выбраны уроки искл.")
             warning.root.mainloop()
             return
+        if new_val != "1, 2, ... , n" or new_val != "":
+            for l in new_val.split(", "):
+                if l not in char or l in l_class:
+                    warning = eror_popup(self.root_exce, "Ошибке в искл. уроке")
+                    warning.root.mainloop()
+                    return
+                else:
+                    l_class.append(l)
         #
 
         for idx, exce in enumerate(self.parent_menu.data_exce):
@@ -4901,13 +7313,11 @@ class popup_exce_2:
                 warning.root.mainloop()               
                 return
 
-        self.parent_menu.data_exce[self.idx] = [new_day, new_beg, new_end]
+        self.parent_menu.data_exce[self.idx] = [new_day, new_val]
         self.parent_menu.update_exce()
         popup(self.parent_menu.root_teacher_info, "Искл. обновлено!", "Успех").root.mainloop()
         self.root_exce.destroy()
 ###
-
-
 
 #<Окно доп инфы> - # +++
 class extra_info:
@@ -4917,7 +7327,7 @@ class extra_info:
         self.con = con
         self.base = base
         self.parent_id = id
-        self.root_extra_info.title("Доп инфа")
+        self.root_extra_info.title("Занятость")
         self.root_extra_info.geometry(f"{int(self.root_extra_info.winfo_screenwidth() * 0.54)}x{int(self.root_extra_info.winfo_screenheight()*0.58)}")
         self.root_extra_info.resizable(width=False, height=False)
 
@@ -5040,7 +7450,7 @@ class eror_popup:
             text = mess,
             font = ("Helvetica", 20,)
         )
-        text_eror.place(relx = 0, rely = 0.17, relwidth = 1, relheight = 0.3)
+        text_eror.place(relx = 0, rely = 0.17, relwidth = 1, relheight = 0.25)
 
         self.loading_chars = ["xxooo", "oxxoo", "ooxxo", "oooxx", "ooxxo", "oxxoo"]
         self.loading_index = 0
@@ -5050,7 +7460,7 @@ class eror_popup:
             font=("Helvetica", 40),
             fg = "#E52B50"
         )
-        self.loading_label.place(relx=0, rely=0.37, relwidth=1, relheight=0.2)
+        self.loading_label.place(relx=0, rely=0.4, relwidth=1, relheight=0.2)
         self.animate_loading()
 
         button_end = ttk.Button(
@@ -5088,7 +7498,7 @@ class popup:
             text = mess,
             font = ("Helvetica", 20, )
         )
-        text_eror.place(relx = 0, rely = 0.17, relwidth = 1, relheight = 0.3)
+        text_eror.place(relx = 0, rely = 0.17, relwidth = 1, relheight = 0.25)
 
         self.loading_chars = ["xxooo", "oxxoo", "ooxxo", "oooxx", "ooxxo", "oxxoo"]
         self.loading_index = 0
@@ -5098,7 +7508,7 @@ class popup:
             font=("Helvetica", 40),
             fg = "Black"
         )
-        self.loading_label.place(relx=0, rely=0.37, relwidth=1, relheight=0.2)
+        self.loading_label.place(relx=0, rely=0.4, relwidth=1, relheight=0.2)
         self.animate_loading()
 
         button_end = ttk.Button(
@@ -5114,6 +7524,293 @@ class popup:
         self.root.after(500, self.animate_loading)
 ###
 
+###
+# ФУНКЦИЯ ЭКСПОРТА УЧИТЕЛЕЙ В ФОРМАТ РАСПИСАНИЯ
+###
+
+def export_teachers_to_schedule_format(conn):
+
+    cursor = conn.cursor()
+    
+    teachers_list = []
+    
+    # Получаем всех учителей из БД
+    cursor.execute("SELECT id, Surname, Name, Patrony, Trans FROM teachers ORDER BY Surname, Name")
+    teachers_db = cursor.fetchall()
+    
+    days = ("Пн", "Вт", "Ср", "Чт", "Пт", "Сб")
+    ful_day_to_short = {
+            "Понедельник": "Пн",
+            "Вторник": "Вт",
+            "Среда": "Ср",
+            "Четверг":"Чт",
+            "Пятница":"Пт",
+            "Суббота":"Сб",
+        }
+    for teacher_id, surname, name, patrony, trans in teachers_db:
+        # Форматируем ФИО
+        full_name = f"{surname} {name[0]}. {patrony[0]}."
+        
+        # Получаем исключения (дни и уроки, когда учитель недоступен)
+        cursor.execute(
+            "SELECT Day, Lessons FROM exceptions WHERE Rel = ?",
+            (f"{teacher_id}",)
+        )
+        exceptions_db = cursor.fetchall()
+        
+        # Преобразуем исключения в формат exce
+        exce = {
+            "Пн": [], 
+            "Вт": [], 
+            "Ср": [], 
+            "Чт": [],   
+            "Пт": [], 
+            "Сб": []
+        }
+        for e in exceptions_db:
+            for lesson in e[1].split(", "):
+                exce[ful_day_to_short[e[0]]].append(int(lesson))
+
+
+        # Получаем приоритеты кабинетов
+        cursor.execute(
+            "SELECT Building, Rooms FROM prio WHERE Rel = ?",
+            (f"{teacher_id}",)
+        )
+        prio_db = cursor.fetchall()
+        
+        # Преобразуем приоритеты в формат prio
+        prio = {"1": [], "2": []}
+        for building, rooms_str in prio_db:
+            if building == "Лицей":
+                b = 1
+            else:
+                b = 2
+            for r in rooms_str.split(", "):
+                prio[str(b)].append(int(r))
+            
+        # Генерируем цвет (случайный красивый цвет)
+        colors = [
+            "FFD1DC", "EEE6A3", "EFA94A", "EFA94A", "7FB5B5", "5D9B9B",
+            "E7ECFF", "77DD77", "FF7514", "FF8C69", "FF9BAA", "FFB28B",
+            "FCE883", "BEBD7F", "C6DF90", "99FF99", "AFDAFC", "E6E6FA",
+            "B5F2EA", "F5F5DC", "E4717A", "B39F7A", "E6D690", "EAE0C8",
+            "F2E8C9", "F2DDC6", "FDF4E3", "C6D8FF", "3EB489", "ACE5EE",
+            "A8E4A0", "CCCCFF", "FAE7B5", "FADADD", "AFEEEE", "ACB78E",
+            "DAD871", "FFCF48", "A2A2D0", "FFC1CC", "FCD975", "5F9EA0", 
+            "FFBD88", "9FE2BF", "71BC78", "E5E4E2", "DCD0FF", "ACE1AF",
+            "D8BFD8", "FFBCAD", "FFEFD5"
+        ]
+        color = random.choice(colors)
+
+        if trans == "Да":
+            t = 1
+        else:
+            t = 0
+
+        # Создаём словарь учителя
+        teacher_dict = {
+            "name": full_name,
+            "exce": exce,
+            "prio": prio,
+            "trans_1": t,
+            "color": color
+        }
+        
+        teachers_list.append(teacher_dict)
+    
+    return teachers_list
+
+
+###
+# ФУНКЦИЯ ЭКСПОРТА КЛАССОВ В ФОРМАТ РАСПИСАНИЯ
+###
+
+def export_classes_to_schedule_format(conn, cher_buildings):
+
+    cher = cher_buildings
+    cursor = conn.cursor()
+
+    classes_list = []
+    
+    # Получаем все классы из БД
+    cursor.execute("SELECT id, Number, Letter FROM parallels ORDER BY Number, Letter")
+    parallels = cursor.fetchall()
+    
+    days_ru = ("Пн", "Вт", "Ср", "Чт", "Пт", "Сб")
+    
+    for parallel_id, number, letter in parallels:
+        class_name = f"{number}{letter}"
+        
+        # Получаем информацию о buildings для этого класса
+        if int(number) in cher[0]:
+            b = { 
+                    "Пн": "2",  
+                    "Вт": "1",  
+                    "Ср": "2", 
+                    "Чт": "1",  
+                    "Пт": "2",  
+                    "Сб": "1" 
+                }      
+        else:
+            b = { 
+                    "Пн": "1",  
+                    "Вт": "2",  
+                    "Ср": "1", 
+                    "Чт": "2",  
+                    "Пт": "1",  
+                    "Сб": "2" 
+                }  
+        # Получаем предметы для этого класса
+        cursor.execute(
+            """SELECT Subject, Hours, Id_teacher FROM lessons WHERE Id_parallel = ? ORDER BY Subject""",
+            (str(parallel_id),)
+        )
+        lessons = cursor.fetchall()
+        
+        subjects = []
+
+        #Вспомогалка для всего кроме двух групп и физкультур
+        teacher_help = {}
+        for subject, hours, id_teacher in lessons:
+            
+            
+            # Получаем информацию об учителе
+            cursor.execute(
+                "SELECT Surname, Name, Patrony FROM teachers WHERE id = ?",
+                (id_teacher,)
+            )
+            teacher_row = cursor.fetchone()
+    
+            surname, name, patrony = teacher_row
+            teacher_name = f"{surname} {name[0]}. {patrony[0]}."    
+
+            teacher_help[teacher_name] = [[], 0]
+        
+        
+        for subject, hours, id_teacher in lessons:
+            if subject != "Информатика_1" and subject != "Информатика_2" and subject != "Английский язык_1" and subject != "Английский язык_2":
+
+
+                # Получаем информацию об учителе
+                cursor.execute(
+                    "SELECT Surname, Name, Patrony FROM teachers WHERE id = ?",
+                    (id_teacher,)
+                )
+                teacher_row = cursor.fetchone()
+
+                surname, name, patrony = teacher_row
+                teacher_name = f"{surname} {name[0]}. {patrony[0]}."    
+
+                teacher_help[teacher_name][0].append(subject)
+                teacher_help[teacher_name][1] = teacher_help[teacher_name][1] + int(hours)
+        #######
+
+            
+            
+        #Добавление всего кроме двух групп и физры
+        for key, val in teacher_help.items():
+            # Пропускаем учителей, которые преподают только инфу и англ
+            if not val[0]:
+                continue
+            
+            n = ""
+            for i in range(0, len(val[0])):
+                if i == len(val[0]) - 1:
+                    n += val[0][i]
+                else:
+                    n += f"{val[0][i]}/"
+
+            subjects.append({
+                "name": n,
+                "teacher": (key,),
+                "hours": val[1]
+            })
+        
+
+       
+
+        #Добавление физры
+        cursor.execute("""SELECT Teacher FROM pe WHERE Id_parallel = ?""",
+                       (parallel_id, ))
+        values = cursor.fetchall()
+        c = 0
+        for v in values: 
+            c += 1
+        if c:
+            subjects.append({
+                "name": "Физра",
+                "teacher": (v[0],),
+                "hours": c
+            })
+        ###
+
+        #Добавление инфы
+        l_teachers = []
+        h = None
+        for subject, hours, id_teacher in lessons:
+            if subject == "Информатика_1" or subject == "Информатика_2":
+
+
+                # Получаем информацию об учителе
+                cursor.execute(
+                    "SELECT Surname, Name, Patrony FROM teachers WHERE id = ?",
+                    (id_teacher,)
+                )
+                teacher_row = cursor.fetchone()
+                surname, name, patrony = teacher_row
+                teacher_name = f"{surname} {name[0]}. {patrony[0]}."  
+                l_teachers.append(teacher_name)
+                h = int(hours)
+        if l_teachers:
+            subjects.append({
+                "name": "Инфа",
+                "teacher": (l_teachers[0], l_teachers[1], ),
+                "hours": h
+            })
+        #
+
+        #Добавление англ
+        a_teachers = []
+        h = None
+
+        for subject, hours, id_teacher in lessons:
+            if subject == "Английский язык_1" or subject == "Английский язык_2":
+
+
+                # Получаем информацию об учителе
+                cursor.execute(
+                    "SELECT Surname, Name, Patrony FROM teachers WHERE id = ?",
+                    (id_teacher,)
+                )
+                teacher_row = cursor.fetchone()
+                surname, name, patrony = teacher_row
+                teacher_name = f"{surname} {name[0]}. {patrony[0]}."  
+                a_teachers.append(teacher_name)
+                h = int(hours)
+        if a_teachers:
+            subjects.append({
+                "name": "Англ",
+                "teacher": (a_teachers[0], a_teachers[1], ),
+                "hours": h
+            })
+           
+        ###
+
+
+        # Создаём словарь класса
+        class_dict = {
+            "name": class_name,
+            "buildings": b,
+            "subjects": subjects
+        }
+        
+        classes_list.append(class_dict)
+        ###
+    
+    return classes_list
+
+###
 #Начало программы
 if __name__ == "__main__":
 
